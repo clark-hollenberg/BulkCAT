@@ -135,7 +135,11 @@ run_bulkCAT <- function(input_df = NULL,
 
         # find all taxa in list starting with the binomial
         related_taxa <- grep(paste0("^", binomial, "\\b"), species_list, value = TRUE)
-        if (length(related_taxa) == 2) {
+
+        binomial_present <- binomial %in% related_taxa
+        num_infraspp <- sum(lengths(strsplit(related_taxa, "\\s+")) > 2)
+
+        if (binomial_present && num_infraspp == 1) {
           # only trinomial and binomial exists -> copy binomial results
           print("Only one infraspecies found, matching binomial results...")
           binomial_result <- results[nrow(results), ]
