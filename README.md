@@ -24,7 +24,7 @@ You can install BulkCAT directly from GitHub using the `remotes` package:
 install.packages("remotes")
 
 # Install BulkCAT from GitHub
-remotes::install_github("chollenb-cnhp/BulkCAT")
+remotes::install_github("clark-hollenberg/BulkCAT")
 ```
 
 After installation, load the package:
