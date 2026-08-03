@@ -2,13 +2,13 @@
 
 Multispecies NatureServe element rarity rank calculator
 
-Created by Clark Hollenberg at the Colorado Natural Heritage Program, October 2024
+Created by Clark Hollenberg at the Colorado Natural Heritage Program (CNHP), October 2024
 
 ---
 
 ## **Introduction**
 
-BulkCAT calculates conservation status metrics for multiple species using user-supplied point occurrence data with WGS84 latitude and longitude coordinates. 
+BulkCAT calculates conservation status metrics for multiple species using user-supplied point occurrence data with WGS84 latitude and longitude coordinates. BulkCAT can also be used for plant associations/communities.
 The package implements a bulk-processing version of the "Conservation status Assessment Tool" (CAT) methodology from IUCN and NatureServe. 
 For each species, it computes extent of occurrence (EOO in km²), area of occupancy (AOO, number of 2x2 km grid cells), number of hypothetical Element Occurrences (EOs), and an overall rarity rank (subnational rank - SRank). 
 This allows efficient multi-species assessments at scales not feasible with interactive tools like GeoCAT or RARECAT. Calculated values may differ from RARECAT by ~1% for large datasets.
@@ -16,6 +16,8 @@ This allows efficient multi-species assessments at scales not feasible with inte
 ---
 
 ## **Installation**
+
+BulkCAT requires R/RStudio to be installed on your computer. If you still need to do this, follow these installation [instructions](https://rstudio-education.github.io/hopr/starting.html).
 
 You can install BulkCAT directly from GitHub using the `remotes` package:
 
@@ -45,11 +47,9 @@ The input `.csv` should include at least three columns:
 
 You can change the names of these columns, but if you do, they must also be modified in the function call.
 
-There is an option to include a polygon layer as a shapefile for calculation of AOO, which may be helpful for plant communities or large occurrences best defined by a polygon.
+There is an option to include a polygon layer as a shapefile for calculation of AOO, which may be helpful for plant communities or large occurrences best defined by a polygon. Note that you must submit EITHER a .csv OR a shapefile.
 
-For vascular plants, occurrence data were downloaded from SEINet and iNaturalist research grade. Note that GBIF downloads may have obscured locations for some species. A SEINet login with special permissions allows use of the most accurate locations available.
-
-Scientific names were translated to SNAMEs used in Biotics using an iterative approach with Biotics synonyms, rWCVP, Symbiota, GNAME/SNAME mapping, and infraspecific epithet dropping to reach \~99% coverage. Deduplication was performed conservatively to avoid deleting unique records, prioritizing duplicates based on herbarium record counts for the sample region (Colorado).
+To run BulkCAT for Colorado's vascular plants at CNHP, we downloaded SEINet and iNaturalist research grade observations. Note that GBIF downloads may have obscured locations for some species. A SEINet login with special permissions allows use of the most accurate locations available. Scientific names were translated to SNAMEs used in Biotics using an approach now available in the [synon](https://github.com/clark-hollenberg/synon) R package. synon uses Biotics synonyms, rWCVP, Symbiota, GNAME/SNAME mapping, and optional infraspecific epithet dropping to reach \~99% coverage. Deduplication was performed conservatively to avoid deleting unique records, prioritizing duplicates based on herbarium record counts for the sample region (Colorado). If you need guidance on how to use these tools for your state, contact me.
 
 ---
 
@@ -62,8 +62,7 @@ It uses:
 * **Area of Occupancy (AOO)** – double weighted
 * **Number of hypothetical EOs**
 
-Rules are based on the **RULES sheet** from the Element Rank Estimator Excel macro workbook (NatureServe): [link](https://www.natureserve.org/products/conservation-rank-calculator/download).
-Bin divisions for AOO were adjusted to match the expected logic of the calculator.
+Rules are based on the **RULES sheet** from the Element Rank Estimator Excel macro workbook (NatureServe): [link](https://www.natureserve.org/products/conservation-rank-calculator/download). There is a "threats" option in run_bulkCAT() that shows the effect of potential threat assignments on the calculated conservation status (SRank). This allows the user to quickly consider threats for relevant taxa.
 
 ---
 
@@ -71,7 +70,7 @@ Bin divisions for AOO were adjusted to match the expected logic of the calculato
 
 * Binomial species without infraspecific epithet are clustered with any infraspecific taxa for ranking.
 
-  * Example: *Abies lasiocarpa* includes points from *Abies lasiocarpa var. bifolia*.
+  * Example: *Abies lasiocarpa* includes points/polygons from *Abies lasiocarpa var. bifolia*.
 * Trinomial names are ranked using only exact matches.
 
 ---
@@ -94,7 +93,7 @@ library(BulkCAT)
 csv_path <- "path/to/input_file.csv"
 input_df <- read.csv(csv_path)
 
-# Remove duplicates
+# Remove duplicates (optional)
 input_df <- deduplicate(
   input_df = input_df,
   cols = c("recordedBy", "recordNumber", "scientificName", "eventDate"),
