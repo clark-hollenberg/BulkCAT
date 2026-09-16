@@ -9,11 +9,13 @@
 #' @param lon Longitude column name. Default = "decimalLongitude"
 #' @param eo_separation Minimum separation distance (m) for unique EO clusters. Default = 1000m.
 #' @param grid_size Side length (m) for AOO grid cells. Default = 2000m.
-#' @param threats Boolean if you would like threat options in the output. calc_threats() can also be run on the output later.
-#' @param community Boolean if the input contains plant association (or non-scientific) names. Default = FALSE.
+#' @param factors_df Optional supplemental dataframe containing rank factors that are pre-assigned by experts (download from Biotics). Supplemental factors include threats, trends, and population sizes. See README for additional details on factors_df.
+#' @param community Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE.
 #' @param poly_layer Shapefile path or sf object for polygon layer to be used for calculating AOO. Default = NULL.
 #' @return Dataframe with calculated rarity metrics for each species/element.
 #' @export
+#'
+#'
 #'
 run_bulkCAT <- function(input_df = NULL,
                         sname = "scientificName",
@@ -21,16 +23,20 @@ run_bulkCAT <- function(input_df = NULL,
                         lon = "decimalLongitude",
                         eo_separation = 1000,
                         grid_size = 2000,
-                        threats = FALSE,
+                        factors_df = NULL,
                         community = FALSE,
-                        poly_layer = NULL) {
+                        poly_layer = NULL,
+                        spatial_code = "S") {
 
   # ----------------------------------------------------------------
   # ----- Input validation -----
   # ----------------------------------------------------------------
+  if (!(grid_size %in% c(2000, 1000))){
+    stop("Only grid cell sizes of 4 sq-km (2000m sides) or 1 sq-km (1000m sides) are supported.")
+  }
   if (!is.null(input_df)){
     if (!is.null(poly_layer)){
-      stop("You should provide EITHER an input_df of lat/lon coordinates OR a poly_layer, not both!")
+      stop("You should provide EITHER an input_df with lat/lon coordinates OR a poly_layer, not both!")
     }
     if (!is.data.frame(input_df))
     {
@@ -53,7 +59,6 @@ run_bulkCAT <- function(input_df = NULL,
 
       # remove genus-only records (keep names with ≥ 2 parts)
       df <- df[sapply(strsplit(df[[sname]], "\\s+"), length) >= 2, ]
-
       if (!is.null(poly_layer)){
         print("Polygon layer was provided, but will be ignored. Input dataframe will be used for all calculations.")
       }
@@ -95,6 +100,30 @@ run_bulkCAT <- function(input_df = NULL,
     stop("Species column has only missing values.")
   }
 
+  if (!is.null(factors_df)){
+    if (!is.data.frame(factors_df))
+    {
+      stop("factors_df must be a data frame. Refer to documentation for formatting.")
+    }
+    if (!(sname %in% names(factors_df))) {
+      stop("factors_df does not contain scientific name column: ", sname)
+    }else{
+      if (!(any(factors_df[[sname]] %in% df[[sname]]))) {
+        stop("factors_df does not contain any scientific names matching input taxa in column ", sname)
+      } else{
+        # Keep only one row per species
+        factors_df <- factors_df[!is.na(factors_df$scientificName), ]
+
+        # Match factor names to the species names used in the analysis
+        factors_df <- factors_df[
+          factors_df$scientificName %in% unique(input_df[[sname]]),
+        ]
+      }
+    }
+  }else{
+    print("Note: factors_df was not provided. Consider setting threats=TRUE or run calc_threats() after completion to see the effects of threats on ranks")
+  }
+
   # ----------------------------------------------------------------
   # ----- Prepare coordinate reference systems -----
   # ----------------------------------------------------------------
@@ -108,7 +137,6 @@ run_bulkCAT <- function(input_df = NULL,
 
     gdf <- sf::st_as_sf(df, coords = c(lon, lat), crs = wgs_crs)
     gdf_proj <- sf::st_transform(gdf, crs = equal_area_crs)
-
 
   # ----------------------------------------------------------------
   # ----- Identify species list -----
@@ -148,7 +176,7 @@ run_bulkCAT <- function(input_df = NULL,
             num_obs = binomial_result$num_obs,
             eoo_area_km2 = binomial_result$eoo_area_km2,
             aoo_num_cells = binomial_result$aoo_num_cells,
-            num_EOs = binomial_result$num_EOs,
+            num_eo = binomial_result$num_eo,
             stringsAsFactors = FALSE
           ))
             next  # skip recalculation for this trinomial
@@ -173,13 +201,6 @@ run_bulkCAT <- function(input_df = NULL,
           next
         }
       }
-
-
-    ###### EOO: Convex Hull Area ######
-
-    hull <- sf::st_convex_hull(sf::st_union(species_subset))
-    eoo_area_km2 <- as.numeric(sf::st_area(hull)) / 1e6
-
     ###### AOO: 2x2 km Grid ######
     coords <- sf::st_coordinates(species_subset)
 
@@ -237,12 +258,27 @@ run_bulkCAT <- function(input_df = NULL,
           # convert cells to km2
           aoo_km2 <- aoo_cells * (grid_size^2) / 1e6
         }
-        }
+    }
 
-    ###### EO Cluster Count (1 km buffer) ######
+    ###### EOO: Convex Hull Area ######
+
+    # if < 3 points were provided for taxon, set eoo = aoo (note, must convert from cells to km2)
+    if (num_obs < 3){
+      eoo_area_km2 <- aoo_cells * (grid_size^2) / 1e6
+    } else{
+      hull <- sf::st_convex_hull(sf::st_union(species_subset))
+      eoo_area_km2 <- as.numeric(sf::st_area(hull)) / 1e6
+    }
+
+    ###### EO Cluster Count ######
     # note that this could be modified to allow for number of EO calculation based on polygons (most relevant for plants)
-    clustering <- dbscan::dbscan(coords, eps = eo_separation, minPts = 1)
-    num_clusters <- max(clustering$cluster)
+
+      clustering <- dbscan::dbscan(
+        coords,
+        eps = eo_separation,
+        minPts = 1
+      )
+      num_clusters <- max(clustering$cluster)
 
     ###### Append to results ######
     if (!community){
@@ -251,7 +287,7 @@ run_bulkCAT <- function(input_df = NULL,
         num_obs = num_obs,
         eoo_area_km2 = round(eoo_area_km2, 2),
         aoo_num_cells = aoo_cells,
-        num_EOs = num_clusters,
+        num_eo_calc = num_clusters,
         stringsAsFactors = FALSE
       ))
     } else{
@@ -260,96 +296,16 @@ run_bulkCAT <- function(input_df = NULL,
       num_obs = num_obs,
       eoo_area_km2 = round(eoo_area_km2, 2),
       aoo_km2 = aoo_km2,
-      num_EOs = num_clusters,
+      num_eo_calc = num_clusters,
       stringsAsFactors = FALSE
     ))
     }
   }
+  ranked_results <- apply_factors(results, sname, factors_df, community, grid_size)
 
-  # ----------------------------------------------------------------
-  # ----- RANKING ROLL‑UP -----
-  # ----------------------------------------------------------------
-  rules_df <- data.frame(
-    EOOVal = c(100, 250, 1000, 5000, 20000, 200000, 2500000, 1000000000000000, NA),
-    EOOScore = c(0, 0.79, 1.57, 2.36, 3.14, 3.93, 4.71, 5.5, NA),
-    AOOVal = c(1, 2, 5, 25, 125, 500, 2500, 12500, 1000000000000000),
-    AOOScore = c(0, 0.69, 1.38, 2.06, 2.75, 3.44, 4.13, 4.81, 5.5),
-    NumVal = c(5, 20, 80, 300, 1200, 1000000000000000, NA, NA, NA),
-    NumScore = c(0, 1.38, 2.75, 4.13, 5.5, 5.5, NA, NA, NA),
-    RankVal = c(1.5, 2.5, 3.5, 4.5, 6, NA, NA, NA, NA),
-    RankScore = c("S1", "S2", "S3", "S4", "S5", NA, NA, NA, NA),
-    stringsAsFactors = FALSE
-  )
-
-  rules_df_community <- data.frame(
-    AOOlargeVal = c(1, 2, 5, 20, 125, 500, 5000, 50000, 10000000),
-    AOOmatrixVal = c(10, 30, 100, 300, 1000, 5000, 25000, 200000, 10000000),
-    AOOsmallVal = c(0.1, 0.5, 1, 2, 5, 20, 100, 500, 10000000),
-    AOOlargeScore = c(0, 0.69, 1.38, 2.06, 2.75, 3.44, 4.13, 4.81, 5.5),
-    AOOmatrixScore = c(0, 0.69, 1.38, 2.06, 2.75, 3.44, 4.13, 4.81, 5.5),
-    AOOsmallScore = c(0, 0.69, 1.38, 2.06, 2.75, 3.44, 4.13, 4.81, 5.5),
-    stringsAsFactors = FALSE
-  )
-
-  assign_points <- function(value, rules, metric) {
-    val_col <- paste0(metric, "Val")
-    score_col <- paste0(metric, "Score")
-    idx <- which(value <= rules[[val_col]])[1]
-    if (is.na(idx)) return(0)
-    rules[[score_col]][idx]
-  }
-
-  score_eoo <- function(x) vapply(x, assign_points, numeric(1), rules = rules_df, metric = "EOO")
-  score_num <- function(x) vapply(x, assign_points, numeric(1), rules = rules_df, metric = "Num")
-  score_rank <- function(x) vapply(x, assign_points, character(1), rules = rules_df, metric = "Rank")
-
-  if (community){
-
-    score_aoo <- function(x) vapply(x, assign_points, numeric(1), rules = rules_df_community, metric = "AOOsmall")
-
-
-    results$Points_smallPatch <- (score_eoo(results$eoo_area_km2) +
-                                    2 * score_aoo(results$aoo_km2) +
-                                    score_num(results$num_EOs)) / 4
-    results$SRank_smallPatch <- score_rank(results$Points_smallPatch)
-
-    # calculate AOO as large match by default
-    score_aoo <- function(x) vapply(x, assign_points, numeric(1), rules = rules_df_community, metric = "AOOlarge")
-    results$Points_largePatch <- (score_eoo(results$eoo_area_km2) +
-                         2 * score_aoo(results$aoo_km2) +
-                         score_num(results$num_EOs)) / 4
-    results$SRank_largePatch <- score_rank(results$Points_largePatch)
-
-
-
-    sore_aoo <- function(x) vapply(x, assign_points, numeric(1), rules = rules_df_community, metric = "AOOmatrix")
-    results$Points_matrix <- (score_eoo(results$eoo_area_km2) +
-                                      2 * score_aoo(results$aoo_km2) +
-                                      score_num(results$num_EOs)) / 4
-    results$SRank_matrix <- score_rank(results$Points_matrix)
-
-    }
-  else{
-    score_aoo <- function(x) vapply(x, assign_points, numeric(1), rules = rules_df, metric = "AOO")
-    results$Points <- (score_eoo(results$eoo_area_km2) +
-                         2 * score_aoo(results$aoo_num_cells) +
-                         score_num(results$num_EOs)) / 4
-    results$SRank <- score_rank(results$Points)
-  }
-
-  if (threats){
-    if (community){
-      results <- calc_threats(results, points_col = "Points_smallPatch")
-      results <- calc_threats(results, points_col = "Points_largePatch")
-      results <- calc_threats(results, points_col = "Points_matrix")
-    }
-    else{
-      results <- calc_threats(results)
-    }
-  }
-
-  return(results)
+  return(ranked_results)
 }
+
 #' Deduplicate Records by Specified Columns
 #'
 #' Removes duplicate records from a data frame based on specified columns,
@@ -360,7 +316,6 @@ run_bulkCAT <- function(input_df = NULL,
 #'   Defaults to c("recordedBy", "recordNumber", "scientificName", "eventDate").
 #' @param institution_col A string specifying the column name used to prioritize
 #'   records by institution count. Defaults to "institutionCode".
-#'
 #' @return A data frame with duplicates removed. Prints the number of records removed.
 #' @export
 #'
@@ -419,7 +374,7 @@ calc_threats <- function(input_df, points_col = "Points") {
 
   # threat scenarios
   threats <- data.frame(
-    suffix = c("_VeryHighT", "_HighT", "_MedT", "_LowT"),
+    suffix = c("_VeryHighThreat", "_HighThreat", "_MedThreat", "_LowThreat"),
     value  = c(0, 1.83, 3.67, 5.5),
     stringsAsFactors = FALSE
   )
