@@ -6,7 +6,8 @@ apply_factors <- function(results,
                           sname,
                           factors_df,
                           community,
-                          grid_size) {
+                          grid_size,
+                          no_aoo) {
 
   # ==============================================================
   # RANKING RULES
@@ -68,14 +69,11 @@ apply_factors <- function(results,
 
     if (any(ok)) {
 
-      idx <- findInterval(
+      idx <- vapply(
         value[ok],
-        rules[[metric]][[val_col]]
+        function(x) which(x <= rules[[metric]][[val_col]])[1],
+        integer(1)
       )
-
-      idx[idx < 1] <- 1
-      idx[idx > length(rules[[metric]][[score_col]])] <-
-        length(rules[[metric]][[score_col]])
 
       out[ok] <- rules[[metric]][[score_col]][idx]
     }
@@ -101,61 +99,68 @@ apply_factors <- function(results,
 
   # ---- AOO ----
   if (community) {
-    # first calculate aoo_values based on community patch size
-    aoo_small <- assign_points(
-      results$aoo_km2,
-      rules_AOO_df_community,
-      "AOOsmall"
-    )
+    if (!no_aoo){
+      # first calculate aoo_values based on community patch size
+      aoo_small <- assign_points(
+        results$aoo_km2,
+        rules_AOO_df_community,
+        "AOOsmall"
+      )
 
-    aoo_large <- assign_points(
-      results$aoo_km2,
-      rules_AOO_df_community,
-      "AOOlarge"
-    )
+      aoo_large <- assign_points(
+        results$aoo_km2,
+        rules_AOO_df_community,
+        "AOOlarge"
+      )
 
-    aoo_matrix <- assign_points(
-      results$aoo_km2,
-      rules_AOO_df_community,
-      "AOOmatrix"
-    )
+      aoo_matrix <- assign_points(
+        results$aoo_km2,
+        rules_AOO_df_community,
+        "AOOmatrix"
+      )
 
-    # second, calculate rarity points based for each hypothetical patch size
-    results$PointsSpatial_smallPatch <-
-      (eoo_points +
-         aoo_small +
-         num_points / 3)
+      # second, calculate rarity points based for each hypothetical patch size or no AOO
+      results$PointsSpatial_smallPatch <-
+        ((eoo_points +
+            aoo_small +
+            num_points) / 4)
 
-    results$PointsSpatial_largePatch <-
-      (eoo_points +
-         aoo_large +
-         num_points / 3)
+      results$PointsSpatial_largePatch <-
+        ((eoo_points +
+            aoo_large +
+            num_points) / 4)
 
-    results$PointsSpatial_matrix <-
-      (eoo_points +
-         aoo_matrix +
-         num_points / 3)
+      results$PointsSpatial_matrix <-
+        ((eoo_points +
+            aoo_matrix +
+            num_points) / 4)
 
-    results$RankSpatial_smallPatch <-
-      score_rank(results$PointsSpatial_smallPatch)
+      results$RankSpatial_smallPatch <-
+        score_rank(results$PointsSpatial_smallPatch)
 
-    results$RankSpatial_largePatch <-
-      score_rank(results$PointsSpatial_largePatch)
+      results$RankSpatial_largePatch <-
+        score_rank(results$PointsSpatial_largePatch)
 
-    results$RankSpatial_matrix <-
-      score_rank(results$PointsSpatial_matrix)
+      results$RankSpatial_matrix <-
+        score_rank(results$PointsSpatial_matrix)
+    } else{
+      results$PointsSpatial_no_AOO <-
+        ((eoo_points +
+            num_points) / 2)
 
+      results$RankSpatial_no_AOO <-
+        score_rank(results$PointsSpatial_no_AOO)
+    }
   } else {
     aoo_points <- assign_points(
       results$aoo_num_cells,
       rules_df,
       "AOO"
     )
-
     results$PointsSpatial <-
-      (eoo_points +
+      ((eoo_points +
          aoo_points +
-         score_num(results$num_eo_calc) / 3)
+         num_points) / 4)
 
     results$RankSpatial <- score_rank(results$PointsSpatial)
   }
@@ -183,15 +188,14 @@ apply_factors <- function(results,
   )
 
 eoo_scores <- c(
-    Z = 0,
     A = 0,
-    B = 1.58,
-    C = 3.14,
-    D = 4.72,
-    E = 6.28,
-    F = 7.86,
-    G = 9.42,
-    H = 11.0
+    B = 0.79,
+    C = 1.57,
+    D = 2.36,
+    E = 3.14,
+    F = 3.93,
+    G = 4.71,
+    H = 5.5
   )
 
  num_eo_scores <- c(
@@ -204,14 +208,14 @@ eoo_scores <- c(
 
   aoo_scores <- c(
     A = 0,
-    B = 0.69,
-    C = 1.38,
-    D = 2.06,
-    E = 2.75,
-    F = 3.44,
-    G = 4.13,
-    H = 4.81,
-    I = 5.5
+    B = 1.38,
+    C = 2.76,
+    D = 4.12,
+    E = 5.50,
+    F = 6.88,
+    G = 8.26,
+    H = 9.62,
+    I = 11.00
   )
 
   # number of Good EOs / percent good area
@@ -268,9 +272,7 @@ eoo_scores <- c(
   # ==============================================================
   # ADD FACTOR COLUMNS TO RESULTS
   #
-  # Only add columns that:
-  #   1. exist in factors_df
-  #   2. contain at least one non-NA value
+  # Only add columns that contain at least one non-NA value after filtering to species
   # ==============================================================
 
   factor_idx <- match(
@@ -278,36 +280,25 @@ eoo_scores <- c(
     factors_df[[sname]]
   )
 
-  factor_cols <- intersect(
-    c(
-      "pop_size",
-      "aoo",
-      "eoo",
-      "num_eo_user",
-      "num_good_eo",
-      "perc_good_area",
-      "trend_long",
-      "trend_short",
-      "threat",
-      "vulnerability"
-    ),
-    names(factors_df)
+  factor_cols <- setdiff(
+    names(factors_df),
+    sname
   )
 
   factor_cols <- factor_cols[
     vapply(
       factors_df[factor_cols],
-      function(x) any(!is.na(x)),
+      function(x) {
+        matched <- !is.na(factor_idx)
+        any(!is.na(x[factor_idx[matched]]))
+      },
       logical(1)
     )
   ]
 
   for (col in factor_cols) {
-
     results[[col]] <- NA
-
     matched <- !is.na(factor_idx)
-
     results[[col]][matched] <-
       factors_df[[col]][factor_idx[matched]]
   }
@@ -376,9 +367,9 @@ eoo_scores <- c(
   factor_scores <- list(
     pop_size = pop_size_scores,
     num_eo_user = num_eo_scores,
-    eoo = eoo_scores,
-    aoo = aoo_scores,
-    num_good_eo = good_eo_scores,   # These have the same scoring
+    eoo_user = eoo_scores,
+    aoo_user = aoo_scores,
+    num_good_eo_user = good_eo_scores,   # These have the same scoring
     perc_good_area = good_eo_scores, # These have the same scoring
     threat = threat_scores,
     trend_long = trend_long_scores,
@@ -412,22 +403,46 @@ eoo_scores <- c(
   )
 
   names(factor_ranges) <- names(factor_scores)
-###############################################
+  ##############################################
   # add points to factor_ranges based for the EOO, AOO, and number of EOs determined by BulkCAT
   ###############################################
+  # num EOs
   factor_ranges$num_eo_calc <- list(
     low = assign_points(results$num_eo_calc, rules_df, "Num"),
     high = assign_points(results$num_eo_calc, rules_df, "Num")
   )
 
+  # AOO
   if (!community){
   factor_ranges$aoo_calc <- list(
     low = assign_points(results$aoo_num_cells, rules_df, "AOO"),
     high = assign_points(results$aoo_num_cells, rules_df, "AOO")
   )} else{
-    print("FILL THIS IN!")
-  }
 
+      if (!no_aoo){
+
+        if ("aoo_patch_type" %in% names(results)) {
+
+          # Choose appropriate AOO value based on patch type for each community:
+          aoo_val <- aoo_large # default for large/unknown/NA
+
+          aoo_val[results$aoo_patch_type == "Small patch"] <- aoo_small
+          aoo_val[results$aoo_patch_type == "Matrix"] <- aoo_matrix
+
+          factor_ranges$aoo_calc <- list(
+            low = aoo_val,
+            high = aoo_val)
+
+          } else {
+              print("No patch type provided, assuming large patch type for all communities")
+              factor_ranges$aoo_calc <- list(
+                low = aoo_large,
+                high = aoo_large
+                    )
+              }
+      }
+  }
+  # EOO
   factor_ranges$eoo_calc <- list(
     low = assign_points(results$eoo_area_km2, rules_df, "EOO"),
     high = assign_points(results$eoo_area_km2, rules_df, "EOO")
@@ -481,64 +496,146 @@ eoo_scores <- c(
       )
   }
 
-
-  return(factor_ranges)
-
-
   # ==============================================================
   # CALCULATE RARITY
   # ==============================================================
-  # Helper function: calculate mean of non-NA factor scores
-  # Returns NA if all factors are NA
-  mean_non_na <- function(...) {
-    x <- cbind(...)
-    n_values <- rowSums(!is.na(x))
-    out <- rowSums(x, na.rm = TRUE) / n_values
-    out[n_values == 0] <- NA_real_
-    return(out)
+  # Return a factor's low/high scores, or all NA if the factor
+  # was not provided for any species.
+  get_factor <- function(factor, range) {
+
+    if (!factor %in% names(factor_ranges)) {
+      return(rep(NA_real_, nrow(results)))
+    }
+    factor_ranges[[factor]][[range]]
   }
 
-  if (!community){
+  # Calculate the mean of all non-NA factor scores.
+  # Returns NA if all factors are NA for a row.
+  mean_non_na <- function(..., weights = NULL) {
+
+    x <- cbind(...)
+
+    if (is.null(weights)) {
+      weights <- rep(1, ncol(x))
+    }
+
+    weight_sum <- rowSums(
+      matrix(
+        rep(weights, each = nrow(x)),
+        nrow = nrow(x)
+      ) * !is.na(x)
+    )
+
+    out <- rowSums(x, na.rm = TRUE) / weight_sum
+
+    out[weight_sum == 0] <- NA_real_
+
+    out
+  }
+
+  # for species
+  if (!community) {
+
     # ---- EO-calculated rarity ----
     # pop_size, num_eo_calc, eoo_calc, aoo_calc, num_good_eo
 
     results$Points_rarity_eo_calc_low <- mean_non_na(
-      factors_df$pop_size$low,
-      factors_df$num_eo_calc$low,
-      factors_df$eoo_calc$low,
-      factors_df$aoo_calc$low,
-      factors_df$num_good_eo$low
+      get_factor("pop_size", "low"),
+      get_factor("num_eo_calc", "low"),
+      get_factor("eoo_calc", "low"),
+      get_factor("aoo_calc", "low"),
+      get_factor("num_good_eo", "low"),
+      weights = c(2, 1, 1, 2, 2)
     )
 
     results$Points_rarity_eo_calc_high <- mean_non_na(
-      factors_df$pop_size$high,
-      factors_df$num_eo_calc$high,
-      factors_df$eoo_calc$high,
-      factors_df$aoo_calc$high,
-      factors_df$num_good_eo$high
+      get_factor("pop_size", "high"),
+      get_factor("num_eo_calc", "high"),
+      get_factor("eoo_calc", "high"),
+      get_factor("aoo_calc", "high"),
+      get_factor("num_good_eo", "high"),
+      weights = c(2, 1, 1, 2, 2)
     )
 
     # ---- User-supplied EO rarity ----
     # pop_size, num_eo_user, eoo_calc, aoo_calc, num_good_eo
+    if ("num_eo_user" %in% names(factor_ranges)){
+      results$Points_rarity_eo_user_low <- mean_non_na(
+        get_factor("pop_size", "low"),
+        get_factor("num_eo_user", "low"),
+        get_factor("eoo_calc", "low"),
+        get_factor("aoo_calc", "low"),
+        get_factor("num_good_eo", "low"),
+        weights = c(2, 1, 1, 2, 2)
+      )
 
-    results$Points_rarity_eo_user_low <- mean_non_na(
-      factors_df$pop_size$low,
-      factors_df$num_eo_user$low,
-      factors_df$eoo_calc$low,
-      factors_df$aoo_calc$low,
-      factors_df$num_good_eo$low
-    )
-
-    results$Points_rarity_eo_user_high <- mean_non_na(
-      factors_df$pop_size$high,
-      factors_df$num_eo_user$high,
-      factors_df$eoo_calc$high,
-      factors_df$aoo_calc$high,
-      factors_df$num_good_eo$high
-    )
+      results$Points_rarity_eo_user_high <- mean_non_na(
+        get_factor("pop_size", "high"),
+        get_factor("num_eo_user", "high"),
+        get_factor("eoo_calc", "high"),
+        get_factor("aoo_calc", "high"),
+        get_factor("num_good_eo", "high"),
+        weights = c(2, 1, 1, 2, 2)
+      )
+    }
   } else{
-    "FILL IN!"
-  }
+      # for communities, it is important to distinguish between aoo_user and aoo_calc rather than num_eos
+      # ---- AOO-calculated rarity ----
+      # pop_size, num_eo_calc, eoo_calc, aoo_calc, num_good_eo
+
+      if (!no_aoo){
+        results$Points_rarity_aoo_calc_low <- mean_non_na(
+          get_factor("pop_size", "low"),
+          get_factor("num_eo_calc", "low"),
+          get_factor("eoo_calc", "low"),
+          get_factor("aoo_calc", "low"),
+          get_factor("num_good_eo", "low"),
+          weights = c(2, 1, 1, 2, 2)
+        )
+
+        results$Points_rarity_aoo_calc_high <- mean_non_na(
+          get_factor("pop_size", "high"),
+          get_factor("num_eo_calc", "high"),
+          get_factor("eoo_calc", "high"),
+          get_factor("aoo_calc", "high"),
+          get_factor("num_good_eo", "high"),
+          weights = c(2, 1, 1, 2, 2)
+        )
+      }
+
+      # ---- User-supplied EO rarity ----
+      # pop_size, num_eo_user, eoo_calc, aoo_user, num_good_eo
+      if ("aoo_user" %in% names(factor_ranges)){
+        results$Points_rarity_aoo_calc_low <- mean_non_na(
+          get_factor("pop_size", "low"),
+          get_factor("num_eo_calc", "low"),
+          get_factor("eoo_calc", "low"),
+          get_factor("aoo_user", "low"),
+          get_factor("num_good_eo", "low"),
+          weights = c(2, 1, 1, 2, 2)
+        )
+
+        results$Points_rarity_aoo_calc_high <- mean_non_na(
+          get_factor("pop_size", "high"),
+          get_factor("num_eo_calc", "high"),
+          get_factor("eoo_calc", "high"),
+          get_factor("aoo_user", "high"),
+          get_factor("num_good_eo", "high"),
+          weights = c(2, 1, 1, 2, 2)
+        )
+      }
+    }
+
+  # ==============================================================
+  # THREATS
+  # Threat points are multiplied by the overall Threat weight = .3
+  # ==============================================================
+  results$Points_threats_user_low <- mean_non_na(
+    get_factor("threat", "low"),
+    get_factor("vulnerability", "low"))
+  results$Points_threats_user_high <- mean_non_na(
+    get_factor("threat", "high"),
+    get_factor("vulnerability", "high"))
 
   # ==============================================================
   # TRENDS
@@ -547,51 +644,131 @@ eoo_scores <- c(
   # Therefore they are added directly to the final points.
   #
   # A range such as AC produces:
-  #
   #   low  = A contribution
   #   high = C contribution
   # ==============================================================
 
-  # ==============================================================
-  # THREATS
-  #
-  # Threat points are multiplied by the overall Threat weight = .3
-  # ==============================================================
+  trend_low <- cbind(
+    get_factor("trend_short", "low"),
+    get_factor("trend_long", "low")
+  )
 
+  trend_high <- cbind(
+    get_factor("trend_short", "high"),
+    get_factor("trend_long", "high")
+  )
 
+  results$Points_trend_low <-
+    rowSums(trend_low, na.rm = TRUE)
+
+  results$Points_trend_high <-
+    rowSums(trend_high, na.rm = TRUE)
+
+  # Both trends missing -> NA
+  results$Points_trend_low[
+    rowSums(!is.na(trend_low)) == 0
+  ] <- NA_real_
+
+  results$Points_trend_high[
+    rowSums(!is.na(trend_high)) == 0
+  ] <- NA_real_
 
   # ==============================================================
   # FINAL POINT RANGE
   # ==============================================================
 
+
+  # if threat points are NA for a species, then rarity should be multiplied by 1.0. trends may be NA
+  # If trend points are NA, treat them as 0.
+
+  rarity_multiplier <- ifelse(
+    is.na(results$Points_threats_user_low),
+    1.0,
+    0.7
+  )
+
+  trend_low <- ifelse(
+    is.na(results$Points_trend_low),
+    0,
+    results$Points_trend_low
+  )
+
+  trend_high <- ifelse(
+    is.na(results$Points_trend_high),
+    0,
+    results$Points_trend_high
+  )
+
+  threat_low <- ifelse(
+    is.na(results$Points_threats_user_low),
+    0,
+    results$Points_threats_user_low
+  )
+
+  threat_high <- ifelse(
+    is.na(results$Points_threats_user_high),
+    0,
+    results$Points_threats_user_high
+  )
+
+  ##########################
+  # handle eo_calc/eo_user and aoo_calc/aoo_user for communities and species separately
+
   if (!community) {
 
-    # Rarity = 70%
-    # Threats = 30%
-    # Trends are already weighted and are added directly.
-
-    results$Points_all_factors_low <-
-      0.7 * results$Points_rarity +
-      0.3 * threat$low +
+    results$Points_factors_eo_calc_low <-
+      rarity_multiplier * results$Points_rarity_eo_calc_low +
+      0.3 * threat_low +
       trend_low
 
-    results$Points_all_factors_high <-
-      0.7 * results$Points_rarity +
-      0.3 * threat$high +
+    results$Points_factors_eo_calc_high <-
+      rarity_multiplier * results$Points_rarity_eo_calc_high +
+      0.3* threat_high +
       trend_high
 
-    # Useful single value for diagnostics
-    results$Points_all_factors <-
-      (results$Points_all_factors_low +
-         results$Points_all_factors_high) / 2
+    # if there were any user supplied EO counts in factors_df
+    if ("Points_rarity_eo_user_low" %in% names(results)){
+      results$Points_factors_eo_user_low <-
+        rarity_multiplier * results$Points_rarity_eo_user_low +
+        0.3* threat_low +
+        trend_low
 
-    # Final SRank based on the calculated interval
-    results$SRank_calculated <-
-      rank_from_range(
-        results$Points_all_factors_low,
-        results$Points_all_factors_high
-      )
+      results$Points_factors_eo_user_high <-
+        rarity_multiplier * results$Points_rarity_eo_user_high +
+        0.3* threat_high +
+        trend_high
+    }
+  } else {
+    results$Points_factors_aoo_calc_low <-
+      rarity_multiplier * results$Points_rarity_aoo_calc_low +
+      0.3 * threat_low +
+      trend_low
+
+    results$Points_factors_aoo_calc_high <-
+      rarity_multiplier * results$Points_rarity_aoo_calc_high +
+      0.3* threat_high +
+      trend_high
+
+    # if there were any user supplied EO counts in factors_df
+    if ("Points_rarity_aoo_user_low" %in% names(results)){
+      results$Points_factors_aoo_user_low <-
+        rarity_multiplier * results$Points_rarity_aoo_user_low +
+        0.3* threat_low +
+        trend_low
+
+      results$Points_factors_eo_user_high <-
+        rarity_multiplier * results$Points_rarity_aoo_user_high +
+        0.3* threat_high +
+        trend_high
+    }
   }
 
-  return(results)
+  #########################################
+  # Final ranking rollup (flexible to Points_factor column names)
+
+  return(
+    list(
+    results = assign_rank(results),
+    factor_ranges = factor_ranges)
+  )
 }

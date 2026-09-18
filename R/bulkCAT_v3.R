@@ -1,22 +1,21 @@
 #' Run BulkCAT analysis
 #'
 #' This function completes conservation status assessments (rarity ranks) using NatureServe
-#' methodology. BulkCAT requires a multi-species dataset with name column sname and EITHER a point observations dataframe with lat/lon columns OR a polygon layer.
+#' methodology. BulkCAT requires a multi-species dataset with name column sname formatted as EITHER a point observations dataframe with lat/lon columns OR a polygon layer.
 #'
 #' @param input_df Input multispecies observation points dataframe
+#' @param poly_layer Shapefile path or sf object for polygon layer to be used for calculating AOO. Required for communities. Default = NULL.
 #' @param sname Species name column. Default = "scientificName"
 #' @param lat Latitude column name. Default = "decimalLatitude"
 #' @param lon Longitude column name. Default = "decimalLongitude"
 #' @param eo_separation Minimum separation distance (m) for unique EO clusters. Default = 1000m.
-#' @param grid_size Side length (m) for AOO grid cells. Default = 2000m.
-#' @param factors_df Optional supplemental dataframe containing rank factors that are pre-assigned by experts (download from Biotics). Supplemental factors include threats, trends, and population sizes. See README for additional details on factors_df.
-#' @param community Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE.
-#' @param poly_layer Shapefile path or sf object for polygon layer to be used for calculating AOO. Default = NULL.
-#' @return Dataframe with calculated rarity metrics for each species/element.
+#' @param grid_size Side length (m) for AOO grid cells. Default = 2000m. Must use either 1000 or 2000m edge lengths for appropriate AOO scoring.
+#' @param factors_df Optional supplemental dataframe containing rank factors that are pre-assigned by experts (e.g. download from Biotics). Supplemental factors include threats, trends, and population sizes. See README for additional details on factors_df.
+#' @param community Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE. Large patch AOO calculations will be default unless patch size specified in factors_df. Community ranking must provide a poly layer. Buffer points into polygons if needed.
+#' @return Dataframe with calculated rarity metrics for each species/element. If factors_df is supplied, these fields will be joined to output.
 #' @export
 #'
-#'
-#'
+
 run_bulkCAT <- function(input_df = NULL,
                         sname = "scientificName",
                         lat = "decimalLatitude",
@@ -32,9 +31,13 @@ run_bulkCAT <- function(input_df = NULL,
   # ----- Input validation -----
   # ----------------------------------------------------------------
   if (!(grid_size %in% c(2000, 1000))){
-    stop("Only grid cell sizes of 4 sq-km (2000m sides) or 1 sq-km (1000m sides) are supported.")
-  }
+    stop("Only grid cell sizes of 4 sq-km (2000m sides) or 1 sq-km (1000m sides) are supported.")}
   if (!is.null(input_df)){
+    if (community == TRUE){
+      warning("poly_layer required for communities to calculate AOO measurements. Consider buffering plot points based on a typical patch size. \nAOO will not be included in
+              base rank calculations. AOO can still be included in factors_df if desired.")
+              no_aoo = TRUE
+    }
     if (!is.null(poly_layer)){
       stop("You should provide EITHER an input_df with lat/lon coordinates OR a poly_layer, not both!")
     }
@@ -59,9 +62,6 @@ run_bulkCAT <- function(input_df = NULL,
 
       # remove genus-only records (keep names with ≥ 2 parts)
       df <- df[sapply(strsplit(df[[sname]], "\\s+"), length) >= 2, ]
-      if (!is.null(poly_layer)){
-        print("Polygon layer was provided, but will be ignored. Input dataframe will be used for all calculations.")
-      }
     }
      }
     else{
@@ -74,7 +74,7 @@ run_bulkCAT <- function(input_df = NULL,
         stop("poly_layer must be either a path to a shapefile or an sf object.")
       }
         # create input_df from polygon centroids (used for EOO and num_EOs)
-        # polygon layer should be created from source features, no EOs
+        # polygon layer should be created from source features, or explode eos using helper function
 
         # ensure CRS exists
         if (is.na(sf::st_crs(poly_sf))) {
@@ -191,20 +191,20 @@ run_bulkCAT <- function(input_df = NULL,
         warning("No observations for species: ", species, "; skipping.")
         next
       }}
-    # if processing a plant community dataset
+    # if processing a plant community dataset (trinomial not relevant)
     else
     {
         species_subset <- gdf_proj[gdf_proj[[sname]] == species, ]
         num_obs <- nrow(species_subset)     # count number of observations
         if (num_obs == 0) {
-          warning("No observations for species: ", species, "; skipping.")
+          warning("No observations for community type: ", species, "; skipping.")
           next
         }
       }
     ###### AOO: 2x2 km Grid ######
+    ##########################################################
     coords <- sf::st_coordinates(species_subset)
 
-    ##########################################################
     # Options for polygon AOO calculation
     if (!is.null(poly_layer)) {
       # calculate AOO with 2x2km cells for plants
@@ -301,97 +301,8 @@ run_bulkCAT <- function(input_df = NULL,
     ))
     }
   }
-  ranked_results <- apply_factors(results, sname, factors_df, community, grid_size)
+
+  ranked_results <- apply_factors(results, sname, factors_df, community, grid_size, no_aoo)
 
   return(ranked_results)
-}
-
-#' Deduplicate Records by Specified Columns
-#'
-#' Removes duplicate records from a data frame based on specified columns,
-#' giving priority to institutions with more records.
-#'
-#' @param input_df A data frame containing the records to deduplicate.
-#' @param cols A character vector of column names to check for duplicates.
-#'   Defaults to c("recordedBy", "recordNumber", "scientificName", "eventDate").
-#' @param institution_col A string specifying the column name used to prioritize
-#'   records by institution count. Defaults to "institutionCode".
-#' @return A data frame with duplicates removed. Prints the number of records removed.
-#' @export
-#'
-deduplicate <- function(input_df, cols = c("recordedBy", "recordNumber", "scientificName", "eventDate"), institution_col = "institutionCode") {
-  # Step 1: count records per institution
-  inst_counts <- table(input_df[[institution_col]])
-
-  # Step 2: add counts back as a helper column
-  input_df$inst_count <- inst_counts[input_df[[institution_col]]]
-
-  # Step 3: order rows by inst_count (descending), then by original order
-  ord <- order(-input_df$inst_count, seq_len(nrow(input_df)))
-  input_df <- input_df[ord, ]
-
-  # Step 4: drop duplicates based on user-defined columns
-  dedup_df <- input_df[!duplicated(input_df[cols]), ]
-
-  # Remove helper column
-  dedup_df$inst_count <- NULL
-  duplicates <- nrow(input_df) - nrow(dedup_df)
-  cat("Observations removed via deduplication:", duplicates, "\n")
-
-  return(dedup_df)
-}
-
-#' Show the effects of different potential threat options on calculated ranks.
-#'
-#' Includes low, medium, and high threat options, calculating SRank_lowT, SRank_medT, SRank_highT
-#' to assist with review of rarity-based ranks.
-#'
-#' @param input_df A data frame containing the records to deduplicate {usually an output of runBulkCAT()}
-#' @param points_col A string specifying the column name which contains rarity-based points.
-#'   Defaults to "Points".
-#'
-#' @return A data frame calculated SRanks and Points for different threat options.
-#' @export
-#'
-calc_threats <- function(input_df, points_col = "Points") {
-  # create rules_df based on NS methodology (same as in run_BulkCAT())
-  rules_df <- data.frame(
-    RankVal = c(1.5, 2.5, 3.5, 4.5, 6, NA, NA, NA, NA),
-    RankScore = c("S1", "S2", "S3", "S4", "S5", NA, NA, NA, NA),
-    stringsAsFactors = FALSE
-  )
-
-  assign_points <- function(value, rules, metric) {
-    val_col <- paste0(metric, "Val")
-    score_col <- paste0(metric, "Score")
-    idx <- which(value <= rules[[val_col]])[1]
-    if (length(idx)==0) return(0)
-    rules[[score_col]][idx]
-  }
-
-  score_rank <- function(x) vapply(x, assign_points, character(1), rules = rules_df, metric = "Rank")
-
-
-  # threat scenarios
-  threats <- data.frame(
-    suffix = c("_VeryHighThreat", "_HighThreat", "_MedThreat", "_LowThreat"),
-    value  = c(0, 1.83, 3.67, 5.5),
-    stringsAsFactors = FALSE
-  )
-
-  # apply threats
-  for (i in seq_len(nrow(threats))) {
-
-    threat <- threats$suffix[i]
-    value  <- threats$value[i]
-    suffix <- sub("^Points", "", points_col)
-
-    srank_col_new <- paste0("SRank", suffix, threat)
-    points_col_new <- paste0(points_col, threat)
-
-    input_df[[points_col_new]] <- input_df[[points_col]] * 0.7 + value * 0.3
-    input_df[[srank_col_new]]  <- score_rank(input_df[[points_col_new]])
-  }
-
-  return(input_df)
 }
