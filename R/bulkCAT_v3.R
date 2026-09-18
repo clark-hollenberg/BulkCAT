@@ -4,29 +4,27 @@
 #' methodology. BulkCAT requires a multi-species dataset with name column sname formatted as EITHER a point observations dataframe with lat/lon columns OR a polygon layer.
 #'
 #' @param input_df Input multispecies observation points dataframe
-#' @param poly_layer Shapefile path or sf object for polygon layer to be used for calculating AOO. Required for communities. Default = NULL.
+#' @param poly_layer Shapefile path or sf object for polygon layer to be used for calculating AOO. Recommended for plant communities. Default = NULL.
+#' @param factors_df Optional supplemental dataframe containing rank factors that are pre-assigned by experts (e.g. download from Biotics). Supplemental factors include threats, trends, and population sizes. See README for additional details on factors_df.
+#' @param community Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE. Large patch AOO calculations will be default unless patch size specified in factors_df. Community ranking must provide a poly layer. Buffer points into polygons if needed.
 #' @param sname Species name column. Default = "scientificName"
 #' @param lat Latitude column name. Default = "decimalLatitude"
 #' @param lon Longitude column name. Default = "decimalLongitude"
 #' @param eo_separation Minimum separation distance (m) for unique EO clusters. Default = 1000m.
 #' @param grid_size Side length (m) for AOO grid cells. Default = 2000m. Must use either 1000 or 2000m edge lengths for appropriate AOO scoring.
-#' @param factors_df Optional supplemental dataframe containing rank factors that are pre-assigned by experts (e.g. download from Biotics). Supplemental factors include threats, trends, and population sizes. See README for additional details on factors_df.
-#' @param community Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE. Large patch AOO calculations will be default unless patch size specified in factors_df. Community ranking must provide a poly layer. Buffer points into polygons if needed.
 #' @return Dataframe with calculated rarity metrics for each species/element. If factors_df is supplied, these fields will be joined to output.
 #' @export
 #'
 
 run_bulkCAT <- function(input_df = NULL,
+                        poly_layer = NULL,
+                        factors_df = NULL,
+                        community = FALSE,
                         sname = "scientificName",
                         lat = "decimalLatitude",
                         lon = "decimalLongitude",
                         eo_separation = 1000,
-                        grid_size = 2000,
-                        factors_df = NULL,
-                        community = FALSE,
-                        poly_layer = NULL,
-                        spatial_code = "S") {
-
+                        grid_size = 2000) {
   # ----------------------------------------------------------------
   # ----- Input validation -----
   # ----------------------------------------------------------------
@@ -120,7 +118,7 @@ run_bulkCAT <- function(input_df = NULL,
         ]
       }
     }
-  }else{
+  } else{
     print("Note: factors_df was not provided. Consider setting threats=TRUE or run calc_threats() after completion to see the effects of threats on ranks")
   }
 
@@ -152,6 +150,7 @@ run_bulkCAT <- function(input_df = NULL,
   for (species in species_list) {
     cat("Processing:", species, "\n")
 
+    ########## trinomial handling
     # Match all descendant varieties/subspecies if just genus + species
     if (community == FALSE){
       if (length(strsplit(species, "\\s+")[[1]]) == 2) {
@@ -264,10 +263,13 @@ run_bulkCAT <- function(input_df = NULL,
 
     # if < 3 points were provided for taxon, set eoo = aoo (note, must convert from cells to km2)
     if (num_obs < 3){
-      eoo_area_km2 <- aoo_cells * (grid_size^2) / 1e6
+      if (community) {
+        eoo_area_km2 <- aoo_km2
+      } else {
+        eoo_area_km2 <- aoo_cells * (grid_size^2) / 1e6
+      }
     } else{
-      hull <- sf::st_convex_hull(sf::st_union(species_subset))
-      eoo_area_km2 <- as.numeric(sf::st_area(hull)) / 1e6
+      eoo_area_km2 <- calculate_eoo(species_subset, df, lat, lon, species, sname)
     }
 
     ###### EO Cluster Count ######
