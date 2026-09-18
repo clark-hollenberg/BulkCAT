@@ -3,15 +3,15 @@
 #' Includes low, medium, and high threat options, calculating SRank_lowT, SRank_medT, SRank_highT
 #' to assist with review of rarity-based ranks.
 #'
-#' @param input_df A data frame containing the records to deduplicate {usually an output of runBulkCAT()}
+#' @param input_df A data frame containing spatial rarity points by species {usually an output of runBulkCAT()}
 #' @param rarity_points_col A string specifying the column name which contains rarity-based points.
 #'   Defaults to "PointsSpatial".
-#' @param trends_col A string specifying the column name which contains rarity-based points.
-#'   Defaults to "Points".
+#' @param trends_col A string specifying the column name which contains trend-based points.
+#'   Defaults to NULL.
 #' @return A data frame calculated SRanks and Points for different threat options.
 #' @export
 #'
-calc_threats <- function(input_df, rarity_points_col = "PointsSpatial") {
+calc_threats <- function(input_df, rarity_points_col = "PointsSpatial", trend_points_col = NULL) {
   # create rules_df based on NS methodology (same as in run_BulkCAT())
   rules_df <- data.frame(
     RankVal = c(1.5, 2.5, 3.5, 4.5, 6, NA, NA, NA, NA),
@@ -45,9 +45,15 @@ calc_threats <- function(input_df, rarity_points_col = "PointsSpatial") {
     suffix <- sub("^Points", "", rarity_points_col)
 
     srank_col_new <- paste0("SRank", suffix, threat)
-    rarity_points_col_new <- paste0(rarity_points_col, threat)
+    points_col_new <- paste0(rarity_points_col, threat)
 
     input_df[[rarity_points_col_new]] <- input_df[[rarity_points_col]] * 0.7 + value * 0.3
+
+    # add trends if needed
+    if (!is.null(trend_points_col)){
+      input_df[[rarity_points_col_new]] <- input_df[[rarity_points_col_new]] + input_df[[trend_points_col]]
+    }
+    # score rank (single number)
     input_df[[srank_col_new]]  <- score_rank(input_df[[rarity_points_col_new]])
   }
 

@@ -7,3 +7,4 @@ schema.ini
 *.Rproj
 *.csv
 _*
+_testing/

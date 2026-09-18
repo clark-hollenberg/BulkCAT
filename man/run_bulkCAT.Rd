@@ -6,18 +6,24 @@
 \usage{
 run_bulkCAT(
   input_df = NULL,
+  poly_layer = NULL,
+  factors_df = NULL,
+  community = FALSE,
   sname = "scientificName",
   lat = "decimalLatitude",
   lon = "decimalLongitude",
   eo_separation = 1000,
-  grid_size = 2000,
-  threats = FALSE,
-  community = FALSE,
-  poly_layer = NULL
+  grid_size = 2000
 )
 }
 \arguments{
-\item{input_df}{Input multispecies observation points dataframe}
+\item{input_df}{Input multispecies observation points dataframe. Default = NULL}
+
+\item{poly_layer}{Shapefile path or sf object for polygon layer to be used for calculating AOO. Recommended for plant communities. Default = NULL.}
+
+\item{factors_df}{Optional supplemental dataframe containing rank factors that are pre-assigned by experts (e.g. download from Biotics). Supplemental factors include threats, trends, and population sizes. See README for additional details on factors_df.}
+
+\item{community}{Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE. Large patch AOO calculations will be default unless patch size specified in factors_df. Without a poly_layer, communities will be ranked based on EOO and number of EOs. Buffer points into polygons if needed.}
 
 \item{sname}{Species name column. Default = "scientificName"}
 
@@ -27,18 +33,12 @@ run_bulkCAT(
 
 \item{eo_separation}{Minimum separation distance (m) for unique EO clusters. Default = 1000m.}
 
-\item{grid_size}{Side length (m) for AOO grid cells. Default = 2000m.}
-
-\item{threats}{Boolean if you would like threat options in the output. calc_threats() can also be run on the output later.}
-
-\item{community}{Boolean if the input contains plant association (or non-scientific) names. Default = FALSE.}
-
-\item{poly_layer}{Shapefile path or sf object for polygon layer to be used for calculating AOO. Default = NULL.}
+\item{grid_size}{Side length (m) for AOO grid cells. Default = 2000m. Must use either 1000 or 2000m edge lengths for appropriate AOO scoring.}
 }
 \value{
-Dataframe with calculated rarity metrics for each species/element.
+Dataframe with calculated rarity metrics for each species/element. If factors_df is supplied, these fields will be joined to output.
 }
 \description{
 This function completes conservation status assessments (rarity ranks) using NatureServe
-methodology. BulkCAT requires a multi-species dataset with name column sname and EITHER a point observations dataframe with lat/lon columns OR a polygon layer.
+methodology. BulkCAT requires a multi-species dataset with name column sname formatted as EITHER a point observations dataframe with lat/lon columns OR a polygon layer.
 }

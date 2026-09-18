@@ -3,18 +3,19 @@
 # made modifications to handle polar and antimeridian species
 calculate_eoo <- function(species_subset, df, lat, lon, species, sname){
 
-    species_wgs <- df[df[[sname]] == species, ]
+    species_wgs_df <- df[df[[sname]] == species, ]
+    wgs_crs = 4326
+    lon_values <- species_wgs_df[[lon]]
+    lat_values <- species_wgs_df[[lat]]
 
-    lon <- df[[lon]]
-    lat <- df[[lat]]
+    if (check_polar(lat_values)){
 
-    if (check_polar(lat)){
+      warning("Using polar projection for species ", species)
       # take the original WGS centroids for that species
-      gdf <- sf::st_as_sf(species_wgs, coords = c(lon, lat), crs = wgs_crs)
+      gdf <- sf::st_as_sf(species_wgs_df, coords = c(lon, lat), crs = wgs_crs)
 
       #Use spherical center for potentially polar distributions
-      center <- spherical_center(lon, lat)
-
+      center <- spherical_center(lon_values, lat_values)
       species_subset <- sf::st_transform(
         gdf,
         paste0(
@@ -28,11 +29,12 @@ calculate_eoo <- function(species_subset, df, lat, lon, species, sname){
       )
     }
     else{
-      if (check_antimeridian(lon)){
+      if (check_antimeridian(lon_values)){
 
+        warning("Using antimeridian projection for species ", species)
         # Calculate mean longitude of positive and negative observations
-        lon_pos <- lon[lon >= 0]
-        lon_neg <- lon[lon < 0]
+        lon_pos <- lon_values[lon_values >= 0]
+        lon_neg <- lon_values[lon_values < 0]
 
         mean_pos <- mean(lon_pos)
         mean_neg <- mean(lon_neg)
@@ -54,9 +56,9 @@ calculate_eoo <- function(species_subset, df, lat, lon, species, sname){
           "+proj=cea +lon_0=", lon_0,
           " +lat_ts=0 +datum=WGS84 +units=m +no_defs"
         )
-
+        gdf <- sf::st_as_sf(species_wgs_df, coords = c(lon, lat), crs = wgs_crs)
         species_subset <- sf::st_transform(
-          species_wgs,
+          gdf,
           eoo_crs
         )
       }
@@ -64,6 +66,14 @@ calculate_eoo <- function(species_subset, df, lat, lon, species, sname){
 
     # apply calculation to correctly transformed coordinates
     hull <- sf::st_convex_hull(sf::st_union(species_subset))
+    sf::st_write(
+      hull,
+      dsn = ".",
+      layer = "eoo_hull",
+      driver = "ESRI Shapefile",
+      delete_layer = TRUE,
+      quiet = TRUE
+    )
     eoo_area_km2 <- as.numeric(sf::st_area(hull)) / 1e6
 
   return(eoo_area_km2)
@@ -109,19 +119,13 @@ spherical_center <- function(lon, lat) {
 
 #######################################################
 # check if observations are clustered around one of the poles.
-check_polar <- function(x) {
-  mean_lat <- mean(
-    sf::st_coordinates(x)[, "Y"],
-    na.rm = TRUE
-  )
+check_polar <- function(lat) {
+  mean_lat <- mean(lat, na.rm = TRUE)
 
-  if (mean_lat >= 70) {
-    "north"
-  } else if (mean_lat <= -70) {
-    "south"
-  } else {
-    FALSE
+  if (mean_lat > 70 || mean_lat < -70) {
+    return(TRUE)
   }
+  return(FALSE)
 }
 
 ###################################################

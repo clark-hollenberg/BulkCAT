@@ -3,10 +3,10 @@
 #' This function completes conservation status assessments (rarity ranks) using NatureServe
 #' methodology. BulkCAT requires a multi-species dataset with name column sname formatted as EITHER a point observations dataframe with lat/lon columns OR a polygon layer.
 #'
-#' @param input_df Input multispecies observation points dataframe
+#' @param input_df Input multispecies observation points dataframe. Default = NULL
 #' @param poly_layer Shapefile path or sf object for polygon layer to be used for calculating AOO. Recommended for plant communities. Default = NULL.
 #' @param factors_df Optional supplemental dataframe containing rank factors that are pre-assigned by experts (e.g. download from Biotics). Supplemental factors include threats, trends, and population sizes. See README for additional details on factors_df.
-#' @param community Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE. Large patch AOO calculations will be default unless patch size specified in factors_df. Community ranking must provide a poly layer. Buffer points into polygons if needed.
+#' @param community Boolean if the input contains plant association names. Note that the category boundaries for AOO differ between species and communities. Default = FALSE. Large patch AOO calculations will be default unless patch size specified in factors_df. Without a poly_layer, communities will be ranked based on EOO and number of EOs. Buffer points into polygons if needed.
 #' @param sname Species name column. Default = "scientificName"
 #' @param lat Latitude column name. Default = "decimalLatitude"
 #' @param lon Longitude column name. Default = "decimalLongitude"
@@ -28,99 +28,37 @@ run_bulkCAT <- function(input_df = NULL,
   # ----------------------------------------------------------------
   # ----- Input validation -----
   # ----------------------------------------------------------------
-  if (!(grid_size %in% c(2000, 1000))){
-    stop("Only grid cell sizes of 4 sq-km (2000m sides) or 1 sq-km (1000m sides) are supported.")}
+  validate_grid_size(grid_size)
+  required_cols <- c(sname, lat, lon)
+  no_aoo <- validate_inputs(input_df, poly_layer, required_cols, community)
+
+
+  print("Loading points...")
   if (!is.null(input_df)){
-    if (community == TRUE){
-      warning("poly_layer required for communities to calculate AOO measurements. Consider buffering plot points based on a typical patch size. \nAOO will not be included in
-              base rank calculations. AOO can still be included in factors_df if desired.")
-              no_aoo = TRUE
-    }
-    if (!is.null(poly_layer)){
-      stop("You should provide EITHER an input_df with lat/lon coordinates OR a poly_layer, not both!")
-    }
-    if (!is.data.frame(input_df))
-    {
-      stop("input_df must be a data frame.")
-    }
-    else{
-      print("Loading points from input_df...")
-      required_cols <- c(sname, lat, lon)
-      missing_cols <- setdiff(required_cols, names(input_df))
-      if (length(missing_cols) > 0) {
-        stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
-      }
-      if (!is.numeric(input_df[[lat]]) || !is.numeric(input_df[[lon]])) {
-        stop("Latitude and longitude columns must be numeric.")
-      }
+    df <- input_df[(!is.na(input_df[[lat]]) &
+                      !is.na(input_df[[lon]]) &
+                      !is.na(input_df[[sname]])),]
 
-      df <- input_df[(!is.na(input_df[[lat]]) &
-                        !is.na(input_df[[lon]]) &
-                        !is.na(input_df[[sname]])),]
+  } else{
+    # reproject to WGS84 for lat/lon
+    poly_sf <- sf::st_transform(poly_sf, 4326)
 
-      # remove genus-only records (keep names with ≥ 2 parts)
-      df <- df[sapply(strsplit(df[[sname]], "\\s+"), length) >= 2, ]
-    }
-     }
-    else{
-      if (!is.null(poly_layer)) {
-      if (inherits(poly_layer, "character")) {
-        poly_sf <- sf::st_read(poly_layer, quiet = TRUE)
-      } else if (inherits(poly_layer, "sf")) {
-        poly_sf <- poly_layer
-      } else {
-        stop("poly_layer must be either a path to a shapefile or an sf object.")
-      }
-        # create input_df from polygon centroids (used for EOO and num_EOs)
-        # polygon layer should be created from source features, or explode eos using helper function
+    # centroids in geographic coordinates
+    centroids <- sf::st_centroid(poly_sf)
+    centroid_coords <- sf::st_coordinates(centroids)
+    centroids[[lon]] <- centroid_coords[, 1]
+    centroids[[lat]] <- centroid_coords[, 2]
+    df <- as.data.frame(sf::st_drop_geometry(centroids))
+  }
 
-        # ensure CRS exists
-        if (is.na(sf::st_crs(poly_sf))) {
-          stop("poly_layer has no CRS defined.")
-        }
-
-        # reproject to WGS84 for lat/lon
-        poly_sf <- sf::st_transform(poly_sf, 4326)
-
-        # centroids in geographic coordinates
-        centroids <- sf::st_centroid(poly_sf)
-        centroid_coords <- sf::st_coordinates(centroids)
-        centroids[[lon]] <- centroid_coords[, 1]
-        centroids[[lat]] <- centroid_coords[, 2]
-        df <- as.data.frame(sf::st_drop_geometry(centroids))
-      }
-      else{
-        stop("You must provide either a valid input points dataframe or polygon shapefile/sf object.")
-      }
-    }
+  # remove genus-only records (keep names with ≥ 2 parts)
+  df <- df[sapply(strsplit(df[[sname]], "\\s+"), length) >= 2, ]
 
   if (all(is.na(df[[sname]]))) {
     stop("Species column has only missing values.")
   }
 
-  if (!is.null(factors_df)){
-    if (!is.data.frame(factors_df))
-    {
-      stop("factors_df must be a data frame. Refer to documentation for formatting.")
-    }
-    if (!(sname %in% names(factors_df))) {
-      stop("factors_df does not contain scientific name column: ", sname)
-    }else{
-      if (!(any(factors_df[[sname]] %in% df[[sname]]))) {
-        stop("factors_df does not contain any scientific names matching input taxa in column ", sname)
-      } else{
-        # Keep only one row per species
-        factors_df <- factors_df[!is.na(factors_df$scientificName), ]
-
-        # Match factor names to the species names used in the analysis
-        factors_df <- factors_df[
-          factors_df$scientificName %in% unique(input_df[[sname]]),
-        ]
-      }
-    }
-  } else{
-    print("Note: factors_df was not provided. Consider setting threats=TRUE or run calc_threats() after completion to see the effects of threats on ranks")
-  }
+  factors_df <- validate_factors_df(factors_df, df, sname)
 
   # ----------------------------------------------------------------
   # ----- Prepare coordinate reference systems -----
@@ -133,8 +71,8 @@ run_bulkCAT <- function(input_df = NULL,
     poly_sf <- sf::st_transform(poly_sf, crs = 6933)
   }
 
-    gdf <- sf::st_as_sf(df, coords = c(lon, lat), crs = wgs_crs)
-    gdf_proj <- sf::st_transform(gdf, crs = equal_area_crs)
+  gdf <- sf::st_as_sf(df, coords = c(lon, lat), crs = wgs_crs)
+  gdf_proj <- sf::st_transform(gdf, crs = equal_area_crs)
 
   # ----------------------------------------------------------------
   # ----- Identify species list -----

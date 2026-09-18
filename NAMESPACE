@@ -2,5 +2,7 @@
 
 export(calc_threats)
 export(deduplicate)
-export(outlier_detect)
+export(eo_to_centroids)
+export(filter_eo_shp)
 export(run_bulkCAT)
+export(tabulate_eos)
