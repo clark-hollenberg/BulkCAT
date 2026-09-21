@@ -25,6 +25,14 @@ validate_inputs <- function(input_df, poly_layer, required_cols, community){
     {
       stop("input_df must be a data frame.")
     }
+    missing_cols <- setdiff(required_cols, names(input_df))
+    if (length(missing_cols) > 0) {
+      stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
+    }
+    if (any(input_df[[required_cols[2]]] > 86 | input_df[[required_cols[2]]] < -86, na.rm = TRUE)) {
+      stop("Latitude values must be between -86 and 86.")
+    }
+
   } else {
     # if you have a poly_layer input
     if (!is.null(poly_layer)){
@@ -43,12 +51,11 @@ validate_inputs <- function(input_df, poly_layer, required_cols, community){
         }
     } else{
       stop("You must provide either a valid input points dataframe or polygon shapefile/sf object.")
-      }
-  }
-
-  missing_cols <- setdiff(required_cols, names(input_df))
-  if (length(missing_cols) > 0) {
-    stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
+    }
+    missing_cols <- setdiff(required_cols, names(input_df))
+    if (length(missing_cols) > 0) {
+      stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
+    }
   }
 
   return (no_aoo)

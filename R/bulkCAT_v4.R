@@ -12,6 +12,7 @@
 #' @param lon Longitude column name. Default = "decimalLongitude"
 #' @param eo_separation Minimum separation distance (m) for unique EO clusters. Default = 1000m.
 #' @param grid_size Side length (m) for AOO grid cells. Default = 2000m. Must use either 1000 or 2000m edge lengths for appropriate AOO scoring.
+#' @param trinomial_synon Boolean if single trinomial names should be matched to parent binomial
 #' @return Dataframe with calculated rarity metrics for each species/element. If factors_df is supplied, these fields will be joined to output.
 #' @export
 #'
@@ -24,7 +25,8 @@ run_bulkCAT <- function(input_df = NULL,
                         lat = "decimalLatitude",
                         lon = "decimalLongitude",
                         eo_separation = 1000,
-                        grid_size = 2000) {
+                        grid_size = 2000,
+                        trinomial_synon = FALSE) {
   # ----------------------------------------------------------------
   # ----- Input validation -----
   # ----------------------------------------------------------------
@@ -94,50 +96,47 @@ run_bulkCAT <- function(input_df = NULL,
       if (length(strsplit(species, "\\s+")[[1]]) == 2) {
         species_subset <- gdf_proj[startsWith(gdf_proj[[sname]], species), ]
       } else {
-        # trinomial: check if this is the only infraspecific taxon for the binomial
-        species_parts <- strsplit(species, "\\s+")[[1]]
-        binomial <- paste(species_parts[1:2], collapse = " ")
+          if ((trinomial_synon == TRUE) && (community == FALSE)){
+            # trinomial: check if this is the only infraspecific taxon for the binomial
+            species_parts <- strsplit(species, "\\s+")[[1]]
+            binomial <- paste(species_parts[1:2], collapse = " ")
 
-        # find all taxa in list starting with the binomial
-        related_taxa <- grep(paste0("^", binomial, "\\b"), species_list, value = TRUE)
+            # find all taxa in list starting with the binomial
+            related_taxa <- grep(paste0("^", binomial, "\\b"), species_list, value = TRUE)
 
-        binomial_present <- binomial %in% related_taxa
-        num_infraspp <- sum(lengths(strsplit(related_taxa, "\\s+")) > 2)
+            binomial_present <- binomial %in% related_taxa
+            num_infraspp <- sum(lengths(strsplit(related_taxa, "\\s+")) > 2)
 
-        if (binomial_present && num_infraspp == 1) {
-          # only trinomial and binomial exists -> copy binomial results
-          print("Only one infraspecies found, matching binomial results...")
-          binomial_result <- results[nrow(results), ]
-          results <- rbind(results, data.frame(
-            species = species,
-            num_obs = binomial_result$num_obs,
-            eoo_area_km2 = binomial_result$eoo_area_km2,
-            aoo_num_cells = binomial_result$aoo_num_cells,
-            num_eo = binomial_result$num_eo,
-            stringsAsFactors = FALSE
-          ))
-            next  # skip recalculation for this trinomial
-          }
-        else {
+            if (binomial_present && num_infraspp == 1) {
+              # only trinomial and binomial exists -> copy binomial results
+              print("Only one infraspecies found, matching binomial results...")
+              binomial_result <- results[nrow(results), ]
+              results <- rbind(results, data.frame(
+                species = species,
+                num_obs = binomial_result$num_obs,
+                eoo_area_km2 = binomial_result$eoo_area_km2,
+                aoo_num_cells = binomial_result$aoo_num_cells,
+                num_eo = binomial_result$num_eo,
+                stringsAsFactors = FALSE
+              ))
+              next  # skip recalculation for this trinomial
+              }
+            }
           # multiple infraspecific taxa -> only use exact match
           species_subset <- gdf_proj[gdf_proj[[sname]] == species, ]
-        }}
-
-      num_obs <- nrow(species_subset)     # count number of observations
-      if (num_obs == 0) {
-        warning("No observations for species: ", species, "; skipping.")
-        next
-      }}
-    # if processing a plant community dataset (trinomial not relevant)
-    else
+          }
+    } else
     {
-        species_subset <- gdf_proj[gdf_proj[[sname]] == species, ]
-        num_obs <- nrow(species_subset)     # count number of observations
-        if (num_obs == 0) {
-          warning("No observations for community type: ", species, "; skipping.")
-          next
-        }
-      }
+      # if processing a plant community dataset (trinomial not relevant)
+      species_subset <- gdf_proj[gdf_proj[[sname]] == species, ]
+    }
+
+    num_obs <- nrow(species_subset)     # count number of observations
+    if (num_obs == 0) {
+      warning("No observations for: ", species, "; skipping.")
+      next
+    }
+
     ###### AOO: 2x2 km Grid ######
     ##########################################################
     coords <- sf::st_coordinates(species_subset)
