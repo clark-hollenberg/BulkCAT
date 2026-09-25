@@ -13,6 +13,7 @@
 #' @param eo_separation Minimum separation distance (m) for unique EO clusters. Default = 1000m.
 #' @param grid_size Side length (m) for AOO grid cells. Default = 2000m. Must use either 1000 or 2000m edge lengths for appropriate AOO scoring.
 #' @param trinomial_synon Boolean if single trinomial names should be matched to parent binomial
+#' @param check_global Boolean if polar and antimeridian coordinate systems should be considered for EOO (only if ranking outside North America)
 #' @return Dataframe with calculated rarity metrics for each species/element. If factors_df is supplied, these fields will be joined to output.
 #' @export
 #'
@@ -26,7 +27,8 @@ run_bulkCAT <- function(input_df = NULL,
                         lon = "decimalLongitude",
                         eo_separation = 1000,
                         grid_size = 2000,
-                        trinomial_synon = FALSE) {
+                        trinomial_synon = FALSE,
+                        check_global = FALSE) {
   # ----------------------------------------------------------------
   # ----- Input validation -----
   # ----------------------------------------------------------------
@@ -116,7 +118,7 @@ run_bulkCAT <- function(input_df = NULL,
                 num_obs = binomial_result$num_obs,
                 eoo_area_km2 = binomial_result$eoo_area_km2,
                 aoo_num_cells = binomial_result$aoo_num_cells,
-                num_eo = binomial_result$num_eo,
+                num_eo_calc = binomial_result$num_eo_calc,
                 stringsAsFactors = FALSE
               ))
               next  # skip recalculation for this trinomial
@@ -206,7 +208,7 @@ run_bulkCAT <- function(input_df = NULL,
         eoo_area_km2 <- aoo_cells * (grid_size^2) / 1e6
       }
     } else{
-      eoo_area_km2 <- calculate_eoo(species_subset, df, lat, lon, species, sname)
+      eoo_area_km2 <- calculate_eoo(species_subset, df, lat, lon, species, sname, check_global)
     }
 
     ###### EO Cluster Count ######

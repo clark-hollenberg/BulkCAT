@@ -1,79 +1,73 @@
 ########################################################
 # function to calculate eoo
 # made modifications to handle polar and antimeridian species
-calculate_eoo <- function(species_subset, df, lat, lon, species, sname){
+calculate_eoo <- function(species_subset, df, lat, lon, species, sname, check_global){
 
-    species_wgs_df <- df[df[[sname]] == species, ]
-    wgs_crs = 4326
-    lon_values <- species_wgs_df[[lon]]
-    lat_values <- species_wgs_df[[lat]]
+    if (check_global){
+      species_wgs_df <- df[df[[sname]] == species, ]
+      wgs_crs = 4326
+      lon_values <- species_wgs_df[[lon]]
+      lat_values <- species_wgs_df[[lat]]
 
-    if (check_polar(lat_values)){
+      if (check_polar(lat_values)){
 
-      warning("Using polar projection for species ", species)
-      # take the original WGS centroids for that species
-      gdf <- sf::st_as_sf(species_wgs_df, coords = c(lon, lat), crs = wgs_crs)
-
-      #Use spherical center for potentially polar distributions
-      center <- spherical_center(lon_values, lat_values)
-      species_subset <- sf::st_transform(
-        gdf,
-        paste0(
-          "+proj=laea",
-          " +lat_0=", center["lat"],
-          " +lon_0=", center["lon"],
-          " +datum=WGS84",
-          " +units=m",
-          " +no_defs"
-        )
-      )
-    }
-    else{
-      if (check_antimeridian(lon_values)){
-
-        warning("Using antimeridian projection for species ", species)
-        # Calculate mean longitude of positive and negative observations
-        lon_pos <- lon_values[lon_values >= 0]
-        lon_neg <- lon_values[lon_values < 0]
-
-        mean_pos <- mean(lon_pos)
-        mean_neg <- mean(lon_neg)
-
-        # Distance between groups across the antimeridian
-        wrapped_distance <- (180 - mean_pos) + (180 + mean_neg)
-
-        # Central longitude halfway between the two groups,
-        # traveling across the antimeridian
-        lon_0 <- mean_pos + wrapped_distance / 2
-
-        # Convert back to [-180, 180]
-        if (lon_0 > 180) {
-          lon_0 <- lon_0 - 360
-        }
-
-        # Centered cylindrical equal-area projection
-        eoo_crs <- paste0(
-          "+proj=cea +lon_0=", lon_0,
-          " +lat_ts=0 +datum=WGS84 +units=m +no_defs"
-        )
+        warning("Using polar projection for species ", species)
+        # take the original WGS centroids for that species
         gdf <- sf::st_as_sf(species_wgs_df, coords = c(lon, lat), crs = wgs_crs)
+
+        #Use spherical center for potentially polar distributions
+        center <- spherical_center(lon_values, lat_values)
         species_subset <- sf::st_transform(
           gdf,
-          eoo_crs
+          paste0(
+            "+proj=laea",
+            " +lat_0=", center["lat"],
+            " +lon_0=", center["lon"],
+            " +datum=WGS84",
+            " +units=m",
+            " +no_defs"
+          )
         )
+      }
+      else{
+        if (check_antimeridian(lon_values)){
+
+          warning("Using antimeridian projection for species ", species)
+          # Calculate mean longitude of positive and negative observations
+          lon_pos <- lon_values[lon_values >= 0]
+          lon_neg <- lon_values[lon_values < 0]
+
+          mean_pos <- mean(lon_pos)
+          mean_neg <- mean(lon_neg)
+
+          # Distance between groups across the antimeridian
+          wrapped_distance <- (180 - mean_pos) + (180 + mean_neg)
+
+          # Central longitude halfway between the two groups,
+          # traveling across the antimeridian
+          lon_0 <- mean_pos + wrapped_distance / 2
+
+          # Convert back to [-180, 180]
+          if (lon_0 > 180) {
+            lon_0 <- lon_0 - 360
+          }
+
+          # Centered cylindrical equal-area projection
+          eoo_crs <- paste0(
+            "+proj=cea +lon_0=", lon_0,
+            " +lat_ts=0 +datum=WGS84 +units=m +no_defs"
+          )
+          gdf <- sf::st_as_sf(species_wgs_df, coords = c(lon, lat), crs = wgs_crs)
+          species_subset <- sf::st_transform(
+            gdf,
+            eoo_crs
+          )
+        }
       }
     }
 
     # apply calculation to correctly transformed coordinates
     hull <- sf::st_convex_hull(sf::st_union(species_subset))
-    sf::st_write(
-      hull,
-      dsn = ".",
-      layer = "eoo_hull",
-      driver = "ESRI Shapefile",
-      delete_layer = TRUE,
-      quiet = TRUE
-    )
     eoo_area_km2 <- as.numeric(sf::st_area(hull)) / 1e6
 
   return(eoo_area_km2)

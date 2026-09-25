@@ -3,7 +3,7 @@
 #' Includes low, medium, and high threat options, calculating SRank_lowT, SRank_medT, SRank_highT
 #' to assist with review of rarity-based ranks.
 #'
-#' @param input_df A data frame containing spatial rarity points by species {usually an output of runBulkCAT()}
+#' @param input_df A data frame containing spatial rarity points by species - usually an output of runBulkCAT()
 #' @param rarity_points_col A string specifying the column name which contains rarity-based points.
 #'   Defaults to "PointsSpatial".
 #' @param trends_col A string specifying the column name which contains trend-based points.

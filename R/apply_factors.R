@@ -506,7 +506,8 @@ eoo_scores <- c(
     if (!factor %in% names(factor_ranges)) {
       return(rep(NA_real_, nrow(results)))
     }
-    factor_ranges[[factor]][[range]]
+    out <- factor_ranges[[factor]][[range]]
+    return(out)
   }
 
   # Calculate the mean of all non-NA factor scores.
@@ -577,6 +578,16 @@ eoo_scores <- c(
         get_factor("num_good_eo", "high"),
         weights = c(2, 1, 1, 2, 2)
       )
+
+      # User-supplied EO rarity is only applicable when num_eo_user is supplied
+      results$Points_rarity_eo_user_low[
+        is.na(results$num_eo_user)
+      ] <- NA_real_
+
+      results$Points_rarity_eo_user_high[
+        is.na(results$num_eo_user)
+      ] <- NA_real_
+
     }
   } else{
       # for communities, it is important to distinguish between aoo_user and aoo_calc rather than num_eos
@@ -603,10 +614,10 @@ eoo_scores <- c(
         )
       }
 
-      # ---- User-supplied EO rarity ----
+      # ---- User-supplied AOO rarity ----
       # pop_size, num_eo_user, eoo_calc, aoo_user, num_good_eo
       if ("aoo_user" %in% names(factor_ranges)){
-        results$Points_rarity_aoo_calc_low <- mean_non_na(
+        results$Points_rarity_aoo_user_low <- mean_non_na(
           get_factor("pop_size", "low"),
           get_factor("num_eo_calc", "low"),
           get_factor("eoo_calc", "low"),
@@ -615,7 +626,7 @@ eoo_scores <- c(
           weights = c(2, 1, 1, 2, 2)
         )
 
-        results$Points_rarity_aoo_calc_high <- mean_non_na(
+        results$Points_rarity_aoo_user_high <- mean_non_na(
           get_factor("pop_size", "high"),
           get_factor("num_eo_calc", "high"),
           get_factor("eoo_calc", "high"),
@@ -623,6 +634,15 @@ eoo_scores <- c(
           get_factor("num_good_eo", "high"),
           weights = c(2, 1, 1, 2, 2)
         )
+
+        # User-supplied AOO is only applicable when aoo_user is supplied
+        results$Points_rarity_aoo_user_low[
+          is.na(results$aoo_user)
+        ] <- NA_real_
+
+        results$Points_rarity_aoo_user_high[
+          is.na(results$aoo_user)
+        ] <- NA_real_
       }
     }
 

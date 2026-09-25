@@ -11,7 +11,7 @@ calc_threats(
 )
 }
 \arguments{
-\item{input_df}{A data frame containing spatial rarity points by species {usually an output of runBulkCAT()}}
+\item{input_df}{A data frame containing spatial rarity points by species - usually an output of runBulkCAT()}
 
 \item{rarity_points_col}{A string specifying the column name which contains rarity-based points.
 Defaults to "PointsSpatial".}

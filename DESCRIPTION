@@ -8,7 +8,7 @@ Description: BulkCAT calculates conservation status metrics for multiple species
  Additional rank factors can be supplied by the user.This allows efficient multi-species assessments at scales not feasible with interactive tools like GeoCAT or RARECAT. 
  Calculated values may differ from RARECAT by ~1% for large datasets.
 License: MIT + file LICENSE
-Imports: sf, dbscan, dplyr, stringr, utils, stats
+Imports: sf, dbscan, dplyr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
