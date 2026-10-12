@@ -369,7 +369,7 @@ eoo_scores <- c(
     num_eo_user = num_eo_scores,
     eoo_user = eoo_scores,
     aoo_user = aoo_scores,
-    num_good_eo_user = good_eo_scores,   # These have the same scoring
+    num_good_eo = good_eo_scores,   # These have the same scoring
     perc_good_area = good_eo_scores, # These have the same scoring
     threat = threat_scores,
     trend_long = trend_long_scores,
@@ -579,15 +579,14 @@ eoo_scores <- c(
         weights = c(2, 1, 1, 2, 2)
       )
 
-      # User-supplied EO rarity is only applicable when num_eo_user is supplied
-      results$Points_rarity_eo_user_low[
-        is.na(results$num_eo_user)
-      ] <- NA_real_
+      # for the taxa with num_eo_user = NA, these should be the same as Points_rarity_eo_calc_low/high
+      na_eo_user <- is.na(results$num_eo_user)
 
-      results$Points_rarity_eo_user_high[
-        is.na(results$num_eo_user)
-      ] <- NA_real_
+      results$Points_rarity_eo_user_low[na_eo_user] <-
+        results$Points_rarity_eo_calc_low[na_eo_user]
 
+      results$Points_rarity_eo_user_high[na_eo_user] <-
+        results$Points_rarity_eo_calc_high[na_eo_user]
     }
   } else{
       # for communities, it is important to distinguish between aoo_user and aoo_calc rather than num_eos

@@ -8,7 +8,8 @@ tabulate_eos(
   eo_shp,
   EOID_col = "EOID",
   EO_rank_col = "EORANK",
-  sname = "scientificName"
+  sname = "scientificName",
+  v2 = FALSE
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ tabulate_eos(
 \item{EO_rank_col}{Optional name containing overall EO_rank (e.g. A, AB, D, etc). Default = "EORANK"}
 
 \item{sname}{Species or community name column. Default = "scientificName"}
+
+\item{v2}{Boolean if the new CNHP-proposed method for handling number of good EOs should be used.}
 }
 \value{
 A data frame with number of EOs and number of good EOs organized by species or community name

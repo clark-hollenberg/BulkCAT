@@ -44,17 +44,21 @@ calc_threats <- function(input_df, rarity_points_col = "PointsSpatial", trend_po
     value  <- threats$value[i]
     suffix <- sub("^Points", "", rarity_points_col)
 
-    srank_col_new <- paste0("SRank", suffix, threat)
+    srank_col_new <- paste0("Rank", suffix, threat)
     points_col_new <- paste0(rarity_points_col, threat)
 
-    input_df[[rarity_points_col_new]] <- input_df[[rarity_points_col]] * 0.7 + value * 0.3
+    input_df[[points_col_new]] <- input_df[[rarity_points_col]] * 0.7 + value * 0.3
 
     # add trends if needed
     if (!is.null(trend_points_col)){
-      input_df[[rarity_points_col_new]] <- input_df[[rarity_points_col_new]] + input_df[[trend_points_col]]
+      trend_points <- input_df[[trend_points_col]]
+      trend_points[is.na(trend_points)] <- 0
+
+      input_df[[points_col_new]] <-
+        input_df[[points_col_new]] + trend_points
     }
     # score rank (single number)
-    input_df[[srank_col_new]]  <- score_rank(input_df[[rarity_points_col_new]])
+    input_df[[srank_col_new]]  <- score_rank(input_df[[points_col_new]])
   }
 
   return(input_df)
