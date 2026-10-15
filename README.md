@@ -35,6 +35,7 @@ library(BulkCAT)
 
 # access function help pages
 ?run_bulkCAT
+?tabulate_eos
 ?deduplicate
 ?filter_eo_shp
 ?eo_to_centroids
