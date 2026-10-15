@@ -1,6 +1,6 @@
 # BulkCAT
 
-Multispecies NatureServe element rarity rank calculator
+Multispecies NatureServe element rank calculator
 
 Created by Clark Hollenberg at the Colorado Natural Heritage Program (CNHP), October 2024
 
