@@ -34,29 +34,16 @@ run_bulkCAT <- function(input_df = NULL,
   # ----------------------------------------------------------------
   validate_grid_size(grid_size)
   required_cols <- c(sname, lat, lon)
-  no_aoo <- validate_inputs(input_df, poly_layer, required_cols, community)
+  inputs <- validate_inputs(input_df, poly_layer, required_cols, community)
 
+  input_df <- inputs$input_df
+  poly_sf <- inputs$poly_sf
 
   print("Loading points...")
-  if (!is.null(input_df)){
-    df <- input_df[(!is.na(input_df[[lat]]) &
+
+  df <- input_df[(!is.na(input_df[[lat]]) &
                       !is.na(input_df[[lon]]) &
                       !is.na(input_df[[sname]])),]
-
-  } else{
-    # reproject to WGS84 for lat/lon
-    poly_sf <- sf::st_transform(poly_sf, 4326)
-
-    # centroids in geographic coordinates
-    centroids <- sf::st_centroid(poly_sf)
-    centroid_coords <- sf::st_coordinates(centroids)
-    centroids[[lon]] <- centroid_coords[, 1]
-    centroids[[lat]] <- centroid_coords[, 2]
-    df <- as.data.frame(sf::st_drop_geometry(centroids))
-  }
-
-  # remove genus-only records (keep names with ≥ 2 parts)
-  df <- df[sapply(strsplit(df[[sname]], "\\s+"), length) >= 2, ]
 
   if (all(is.na(df[[sname]]))) {
     stop("Species column has only missing values.")
@@ -146,7 +133,6 @@ run_bulkCAT <- function(input_df = NULL,
     # Options for polygon AOO calculation
     if (!is.null(poly_layer)) {
       # calculate AOO with 2x2km cells for plants
-      if (!community){
         poly_subset <- poly_sf[poly_sf[[sname]]==species, ]
 
         # Fixed global origin (IUCN-style)
@@ -178,12 +164,16 @@ run_bulkCAT <- function(input_df = NULL,
         hits <- sf::st_intersects(grid_sf, poly_subset, sparse = FALSE)
         # Count occupied cells
         aoo_cells <- sum(apply(hits, 1, any))
-      }
-      # calculate AOO with based on total area in sq-km for communities
-      else {
-        poly_subset <- poly_sf[poly_sf[[sname]]==species, ]
-        aoo_km2 <- sum(as.numeric(sf::st_area(poly_subset)), na.rm = TRUE) / 1e6
-      }
+
+        # convert cells to km2
+        if (community) {
+          aoo_km2_grid <- (aoo_cells * grid_size**2) / 1e6
+
+          # calculate AOO with based on total area in sq-km for communities
+          poly_subset <- poly_sf[poly_sf[[sname]]==species, ]
+          aoo_km2 <- sum(as.numeric(sf::st_area(poly_subset)), na.rm = TRUE) / 1e6
+
+        }
     }
     # if no polygon layer provided
     else {
@@ -194,7 +184,7 @@ run_bulkCAT <- function(input_df = NULL,
         if (community)
         {
           # convert cells to km2
-          aoo_km2 <- aoo_cells * (grid_size^2) / 1e6
+          aoo_km2_grid <- aoo_cells * (grid_size^2) / 1e6
         }
     }
 
@@ -232,18 +222,30 @@ run_bulkCAT <- function(input_df = NULL,
         stringsAsFactors = FALSE
       ))
     } else{
-    results <- rbind(results, data.frame(
-      species = species,
-      num_obs = num_obs,
-      eoo_area_km2 = round(eoo_area_km2, 2),
-      aoo_km2 = aoo_km2,
-      num_eo_calc = num_clusters,
-      stringsAsFactors = FALSE
-    ))
+      if (is.null(poly_layer)){
+        results <- rbind(results, data.frame(
+          species = species,
+          num_obs = num_obs,
+          eoo_area_km2 = round(eoo_area_km2, 2),
+          aoo_km2_grid = aoo_km2_grid,
+          num_eo_calc = num_clusters,
+          stringsAsFactors = FALSE
+        ))
+      } else{
+        results <- rbind(results, data.frame(
+          species = species,
+          num_obs = num_obs,
+          eoo_area_km2 = round(eoo_area_km2, 2),
+          aoo_km2 = aoo_km2,
+          aoo_km2_grid = aoo_km2_grid,
+          num_eo_calc = num_clusters,
+          stringsAsFactors = FALSE
+        ))
+      }
     }
   }
-
-  ranked_results <- apply_factors(results, sname, factors_df, community, grid_size, no_aoo)
+  #return(results)
+  ranked_results <- apply_factors(results, sname, factors_df, community, grid_size)
 
   return(ranked_results)
 }

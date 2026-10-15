@@ -6,8 +6,7 @@ apply_factors <- function(results,
                           sname,
                           factors_df,
                           community,
-                          grid_size,
-                          no_aoo) {
+                          grid_size) {
 
   # ==============================================================
   # RANKING RULES
@@ -41,17 +40,16 @@ apply_factors <- function(results,
       c(4, 10, 20, 100, 500, 2000, 10000, 50000, Inf)
   }
 
-  rules_AOO_df_community <- data.frame(
-    AOOlargeVal = c(1, 2, 5, 20, 125, 500, 5000, 50000, Inf),
-    AOOmatrixVal = c(10, 30, 100, 300, 1000, 5000, 25000,
-                     200000, Inf),
-    AOOsmallVal = c(0.1, 0.5, 1, 2, 5, 20, 100, 500, Inf),
-
-    AOOlargeScore = c(0, 1.38, 2.76, 4.12, 5.50, 6.88, 8.26, 9.62, 11.00),
-    AOOmatrixScore = c(0, 1.38, 2.76, 4.12, 5.50, 6.88, 8.26, 9.62, 11.00),
-    AOOsmallScore = c(0, 1.38, 2.76, 4.12, 5.50, 6.88, 8.26, 9.62, 11.00),
-
-    stringsAsFactors = FALSE
+  rules_AOO_df_community <- list(
+    AOOsmall = data.frame(
+      AOOsmallVal = c(0.1, 0.5, 1, 2, 5, 20, 100, 500, Inf),
+      AOOsmallScore = c(0, 1.38, 2.76, 4.12, 5.50, 6.88, 8.26, 9.62, 11.00)),
+    AOOlarge = data.frame(
+      AOOlargeScore = c(0, 1.38, 2.76, 4.12, 5.50, 6.88, 8.26, 9.62, 11.00),
+      AOOlargeVal = c(1, 5, 10, 20, 100, 500, 2000, 20000, Inf)),
+    AOOmatrix = data.frame(
+      AOOmatrixScore = c(0, 1.38, 2.76, 4.12, 5.50, 6.88, 8.26, 9.62, 11.00),
+      AOOmatrixVal = c(10, 30, 100, 300, 1000, 5000, 25000, 200000, Inf))
   )
 
   # ==============================================================
@@ -59,7 +57,6 @@ apply_factors <- function(results,
   # ==============================================================
 
   assign_points <- function(value, rules, metric) {
-
     val_col <- paste0(metric, "Val")
     score_col <- paste0(metric, "Score")
 
@@ -99,58 +96,114 @@ apply_factors <- function(results,
 
   # ---- AOO ----
   if (community) {
-    if (!no_aoo){
       # first calculate aoo_values based on community patch size
-      aoo_small <- assign_points(
-        results$aoo_km2,
-        rules_AOO_df_community,
-        "AOOsmall"
+
+      aoo_types <- c("AOOsmall", "AOOlarge", "AOOmatrix")
+
+      # calculate points for each patch size
+      aoo_points_grid <- setNames(
+        lapply(aoo_types, \(type) {
+          assign_points(
+            results$aoo_km2_grid,
+            rules_AOO_df_community,
+            type
+          )
+        }),
+        paste0(tolower(aoo_types), "_grid")
       )
 
-      aoo_large <- assign_points(
-        results$aoo_km2,
-        rules_AOO_df_community,
-        "AOOlarge"
+      score_lookup <- c(
+        "0" = "A",
+        "1.38" = "B",
+        "2.76" = "C",
+        "4.12" = "D",
+        "5.5" = "E",
+        "6.88" = "F",
+        "8.26" = "G",
+        "9.62" = "H",
+        "11" = "I"
       )
 
-      aoo_matrix <- assign_points(
-        results$aoo_km2,
-        rules_AOO_df_community,
-        "AOOmatrix"
-      )
+      # Convert numeric values to letter scores
+      aoo_scores_grid <- lapply(aoo_points_grid, \(x) {
+        unname(score_lookup[as.character(x)])
+      })
 
-      # second, calculate rarity points based for each hypothetical patch size or no AOO
-      results$PointsSpatial_smallPatch <-
-        ((eoo_points +
-            aoo_small +
-            num_points) / 4)
+      results <- results %>%
+        mutate(
+          AOOsmall_gridScore = aoo_scores_grid$aoosmall_grid,
+          AOOlarge_gridScore = aoo_scores_grid$aoolarge_grid,
+          AOOmatrix_gridScore = aoo_scores_grid$aoomatrix_grid,
+          AOOsmall_gridPoints = aoo_points_grid$aoosmall_grid,
+          AOOlarge_gridPoints = aoo_points_grid$aoolarge_grid,
+          AOOmatrix_gridPoints = aoo_points_grid$aoomatrix_grid
+        )
 
-      results$PointsSpatial_largePatch <-
-        ((eoo_points +
-            aoo_large +
-            num_points) / 4)
+      # using grid values
+      results$RankSpatial_smallPatch_grid <-
+        score_rank(((eoo_points +
+                       aoo_points_grid$aoosmall_grid +
+                       num_points) / 4))
 
-      results$PointsSpatial_matrix <-
-        ((eoo_points +
-            aoo_matrix +
-            num_points) / 4)
+      results$RankSpatial_largePatch_grid <-
+        score_rank(((eoo_points +
+                       aoo_points_grid$aoolarge_grid +
+                       num_points) / 4))
 
-      results$RankSpatial_smallPatch <-
-        score_rank(results$PointsSpatial_smallPatch)
+      results$RankSpatial_matrix_grid <-
+        score_rank(((eoo_points +
+                       aoo_points_grid$aoomatrix_grid +
+                       num_points) / 4))
 
-      results$RankSpatial_largePatch <-
-        score_rank(results$PointsSpatial_largePatch)
+      if ("aoo_km2" %in% names(results)) {
+        aoo_points <- setNames(
+          lapply(aoo_types, \(type) {
+            assign_points(
+              results$aoo_km2,
+              rules_AOO_df_community,
+              type
+            )
+          }),
+          tolower(aoo_types))
 
-      results$RankSpatial_matrix <-
-        score_rank(results$PointsSpatial_matrix)
-    } else{
-      results$PointsSpatial_no_AOO <-
-        ((eoo_points +
-            num_points) / 2)
+        # Convert numeric values to letter scores
+        aoo_scores <- lapply(aoo_points, \(x) {
+          unname(score_lookup[as.character(x)])
+        })
 
+        results <- results %>%
+          mutate(
+            AOOsmall_Score = aoo_scores$aoosmall,
+            AOOlarge_Score = aoo_scores$aoolarge,
+            AOOmatrix_Score = aoo_scores$aoomatrix,
+            AOOsmall_Points = aoo_points$aoosmall,
+            AOOlarge_Points = aoo_points$aoolarge,
+            AOOmatrix_Points = aoo_points$aoomatrix
+          )
+
+        results$RankSpatial_smallPatch <-
+          score_rank(((eoo_points +
+                         aoo_points$aoosmall +
+                         num_points) / 4))
+
+        results$RankSpatial_largePatch <-
+          score_rank(((eoo_points +
+                         aoo_points$aoolarge +
+                         num_points) / 4))
+
+        results$RankSpatial_matrix <-
+          score_rank(((eoo_points +
+                         aoo_points$aoomatrix +
+                         num_points) / 4))
+      }
+
+
+
+      # calculate option without AOO
       results$RankSpatial_no_AOO <-
-        score_rank(results$PointsSpatial_no_AOO)
-    }
+        score_rank(((eoo_points +
+                       num_points) / 2))
+
   } else {
     aoo_points <- assign_points(
       results$aoo_num_cells,
@@ -418,30 +471,57 @@ eoo_scores <- c(
     low = assign_points(results$aoo_num_cells, rules_df, "AOO"),
     high = assign_points(results$aoo_num_cells, rules_df, "AOO")
   )} else{
+      # direct or not, and patch type or not
+      if ("aoo_patch_type" %in% names(results)) {
+          if ("aoo_km2" %in% names(results)){
+            aoo_val <- aoo_points$aoolarge # default for large/unknown/NA
 
-      if (!no_aoo){
+            small_patch <- !is.na(results$aoo_patch_type) &
+              results$aoo_patch_type == "Small patch"
 
-        if ("aoo_patch_type" %in% names(results)) {
+            matrix_patch <- !is.na(results$aoo_patch_type) &
+              results$aoo_patch_type == "Matrix"
 
-          # Choose appropriate AOO value based on patch type for each community:
-          aoo_val <- aoo_large # default for large/unknown/NA
+            aoo_val[small_patch] <- aoo_points$aoosmall[small_patch]
+            aoo_val[matrix_patch] <- aoo_points$aoomatrix[matrix_patch]
 
-          aoo_val[results$aoo_patch_type == "Small patch"] <- aoo_small
-          aoo_val[results$aoo_patch_type == "Matrix"] <- aoo_matrix
+            factor_ranges$aoo_calc <- list(
+              low = aoo_val,
+              high = aoo_val
+            )
+          }
+          # grid cell method
+          aoo_val <- aoo_points_grid$aoolarge_grid # default for large/unknown/NA
 
-          factor_ranges$aoo_calc <- list(
+          small_patch <- !is.na(results$aoo_patch_type) &
+            results$aoo_patch_type == "Small patch"
+
+          matrix_patch <- !is.na(results$aoo_patch_type) &
+            results$aoo_patch_type == "Matrix"
+
+          aoo_val[small_patch] <- aoo_points_grid$aoosmall_grid[small_patch]
+          aoo_val[matrix_patch] <- aoo_points_grid$aoomatrix_grid[matrix_patch]
+
+          factor_ranges$aoo_calc_grid <- list(
             low = aoo_val,
-            high = aoo_val)
+            high = aoo_val
+          )
 
           } else {
               print("No patch type provided, assuming large patch type for all communities")
-              factor_ranges$aoo_calc <- list(
-                low = aoo_large,
-                high = aoo_large
+              factor_ranges$aoo_calc_grid <- list(
+                low = aoo_points_grid$aoolarge,
+                high = aoo_points_grid$aoolarge
                     )
+              if ("aoo_km2" %in% names(results)){
+                factor_ranges$aoo_calc <- list(
+                  low = aoo_points$aoolarge,
+                  high = aoo_points$aoolarge
+                )
               }
+          }
       }
-  }
+
   # EOO
   factor_ranges$eoo_calc <- list(
     low = assign_points(results$eoo_area_km2, rules_df, "EOO"),
@@ -593,8 +673,9 @@ eoo_scores <- c(
       # ---- AOO-calculated rarity ----
       # pop_size, num_eo_calc, eoo_calc, aoo_calc, num_good_eo
 
-      if (!no_aoo){
-        results$Points_rarity_aoo_calc_low <- mean_non_na(
+      # direct method
+      if ("aoo_km2" %in% names(results)) {
+        Points_rarity_aoo_calc_low <- mean_non_na(
           get_factor("pop_size", "low"),
           get_factor("num_eo_calc", "low"),
           get_factor("eoo_calc", "low"),
@@ -603,7 +684,7 @@ eoo_scores <- c(
           weights = c(2, 1, 1, 2, 2)
         )
 
-        results$Points_rarity_aoo_calc_high <- mean_non_na(
+        Points_rarity_aoo_calc_high <- mean_non_na(
           get_factor("pop_size", "high"),
           get_factor("num_eo_calc", "high"),
           get_factor("eoo_calc", "high"),
@@ -612,11 +693,45 @@ eoo_scores <- c(
           weights = c(2, 1, 1, 2, 2)
         )
       }
+    Points_rarity_aoo_calc_grid_low <- mean_non_na(
+      get_factor("pop_size", "low"),
+      get_factor("num_eo_calc", "low"),
+      get_factor("eoo_calc", "low"),
+      get_factor("aoo_calc_grid", "low"),
+      get_factor("num_good_eo", "low"),
+      weights = c(2, 1, 1, 2, 2)
+    )
+
+    Points_rarity_aoo_calc_grid_high <- mean_non_na(
+      get_factor("pop_size", "high"),
+      get_factor("num_eo_calc", "high"),
+      get_factor("eoo_calc", "high"),
+      get_factor("aoo_calc_grid", "high"),
+      get_factor("num_good_eo", "high"),
+      weights = c(2, 1, 1, 2, 2)
+    )
+
+    # without AOO
+    Points_rarity_no_aoo_low <- mean_non_na(
+      get_factor("pop_size", "low"),
+      get_factor("num_eo_calc", "low"),
+      get_factor("eoo_calc", "low"),
+      get_factor("num_good_eo", "low"),
+      weights = c(2, 1, 1, 2)
+    )
+
+    Points_rarity_no_aoo_high <- mean_non_na(
+      get_factor("pop_size", "high"),
+      get_factor("num_eo_calc", "high"),
+      get_factor("eoo_calc", "high"),
+      get_factor("num_good_eo", "high"),
+      weights = c(2, 1, 1, 2)
+    )
 
       # ---- User-supplied AOO rarity ----
       # pop_size, num_eo_user, eoo_calc, aoo_user, num_good_eo
       if ("aoo_user" %in% names(factor_ranges)){
-        results$Points_rarity_aoo_user_low <- mean_non_na(
+        Points_rarity_aoo_user_low <- mean_non_na(
           get_factor("pop_size", "low"),
           get_factor("num_eo_calc", "low"),
           get_factor("eoo_calc", "low"),
@@ -625,7 +740,7 @@ eoo_scores <- c(
           weights = c(2, 1, 1, 2, 2)
         )
 
-        results$Points_rarity_aoo_user_high <- mean_non_na(
+        Points_rarity_aoo_user_high <- mean_non_na(
           get_factor("pop_size", "high"),
           get_factor("num_eo_calc", "high"),
           get_factor("eoo_calc", "high"),
@@ -633,15 +748,6 @@ eoo_scores <- c(
           get_factor("num_good_eo", "high"),
           weights = c(2, 1, 1, 2, 2)
         )
-
-        # User-supplied AOO is only applicable when aoo_user is supplied
-        results$Points_rarity_aoo_user_low[
-          is.na(results$aoo_user)
-        ] <- NA_real_
-
-        results$Points_rarity_aoo_user_high[
-          is.na(results$aoo_user)
-        ] <- NA_real_
       }
     }
 
@@ -758,28 +864,42 @@ eoo_scores <- c(
         trend_high
     }
   } else {
-    results$Points_factors_aoo_calc_low <-
-      rarity_multiplier * results$Points_rarity_aoo_calc_low +
-      0.3 * threat_low +
-      trend_low
 
-    results$Points_factors_aoo_calc_high <-
-      rarity_multiplier * results$Points_rarity_aoo_calc_high +
-      0.3* threat_high +
-      trend_high
+    if ("aoo_km2" %in% names(results)){
+      results$Points_factors_aoo_calc_low <-
+        rarity_multiplier * Points_rarity_aoo_calc_low +
+        0.3 * threat_low +
+        trend_low
+
+      results$Points_factors_aoo_calc_high <-
+        rarity_multiplier * Points_rarity_aoo_calc_high +
+        0.3* threat_high +
+        trend_high
+    }
 
     # if there were any user supplied EO counts in factors_df
     if ("Points_rarity_aoo_user_low" %in% names(results)){
       results$Points_factors_aoo_user_low <-
-        rarity_multiplier * results$Points_rarity_aoo_user_low +
+        rarity_multiplier * Points_rarity_aoo_user_low +
         0.3* threat_low +
         trend_low
 
-      results$Points_factors_eo_user_high <-
-        rarity_multiplier * results$Points_rarity_aoo_user_high +
+      results$Points_factors_aoo_user_high <-
+        rarity_multiplier * Points_rarity_aoo_user_high +
         0.3* threat_high +
         trend_high
     }
+
+    # calculate points based on grid cell AOO
+    results$Points_factors_aoo_calc_grid_low <-
+      rarity_multiplier * Points_rarity_aoo_calc_grid_low +
+      0.3 * threat_low +
+      trend_low
+
+    results$Points_factors_aoo_calc_grid_high <-
+      rarity_multiplier * Points_rarity_aoo_calc_grid_high +
+      0.3* threat_high +
+      trend_high
   }
 
   #########################################

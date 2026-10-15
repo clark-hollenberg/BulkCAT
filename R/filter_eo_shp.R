@@ -44,7 +44,7 @@ filter_eo_shp <- function(
   if (!is.list(remove) ||
       is.null(names(remove)) ||
       any(names(remove) == "")) {
-        stop("'remove' or must be a named list of columns and values to remove")
+        stop("'remove' must be a named list of columns and values to remove")
     }
 
 

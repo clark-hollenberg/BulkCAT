@@ -21,7 +21,8 @@ tabulate_eos <- function(eo_shp, EOID_col = "EOID", EO_rank_col = "EORANK", snam
         stop("eo_shp must be an sf object or a valid file path")
       } else{df <- eo_shp}
     }
-
+  } else{
+    df <- sf::st_drop_geometry(eo_shp)
   }
 
   # Check required columns

@@ -36,7 +36,7 @@ eo_to_centroids <- function(eo_shp, sname = "scientificName") {
 
   # Save as data frame
   df <- data.frame(
-    sname = eo_shp[[sname]],
+    scientificName = eo_shp[[sname]],
     decimalLatitude = coords[, "Y"],
     decimalLongitude = coords[, "X"]
   )
