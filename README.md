@@ -141,10 +141,11 @@ Ranking rules are based on the **RULES sheet** from the Element Rank Estimator E
 * For species, AOO is calculated based on the number of grid cells (either 2x2km or 1x1km) that intersect the point/poly occurrence layer.
 * Plant communities use direct estimate of area of occupancy in sq-km rather than the number of occupied cells. BulkCAT calculates AOO with direct measurements of polygon area (if polygons are supplied) and grid cell intersections for comparison. NatureServe generally uses direct area AOO, but grid cells may be more applicable for some communities.
   * AOO based on grid cell intersection is always calculated
-  * AOO based on polygon area is calculated if a polygon layer is supplied
+  * AOO based on direct measurement of polygon area is calculated if a polygon layer is supplied
   * Rank calculations are completed with up to four alternative AOO options (grid cell, direct area, user-defined AOO estimates, and without AOO)
   * AOO category metrics are variable based on the typical ecosystem patch size (small, large, or matrix). Large patch is used by default.
   * Typical patch size and expert-estimated AOO can be supplied in factors_df for communities
+    * "aoo_patch_type" in factors_df can be "Small patch", "Large patch", or "Matrix"
 ---
 
 ## **Estimating Number of EOs**
