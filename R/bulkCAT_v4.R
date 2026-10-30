@@ -244,7 +244,7 @@ run_bulkCAT <- function(input_df = NULL,
       }
     }
   }
-  #return(results)
+
   ranked_results <- apply_factors(results, sname, factors_df, community, grid_size)
 
   return(ranked_results)

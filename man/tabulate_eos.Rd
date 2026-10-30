@@ -9,7 +9,7 @@ tabulate_eos(
   EOID_col = "EOID",
   EO_rank_col = "EORANK",
   sname = "scientificName",
-  v2 = FALSE
+  v2_good_eo = FALSE
 )
 }
 \arguments{
@@ -21,7 +21,7 @@ tabulate_eos(
 
 \item{sname}{Species or community name column. Default = "scientificName"}
 
-\item{v2}{Boolean if the new CNHP-proposed method for handling number of good EOs should be used.}
+\item{v2_good_eo}{Boolean to use CNHP's new method that calculates number of good EOs as a range. v2_good_eos considers E-ranked EOs as potentially A/B ranked and returns a factor range if applicable.}
 }
 \value{
 A data frame with number of EOs and number of good EOs organized by species or community name

@@ -5,6 +5,5 @@ rWCVP/
 schema.ini
 .Rproj.user
 *.Rproj
-*.csv
 _*
 _testing/

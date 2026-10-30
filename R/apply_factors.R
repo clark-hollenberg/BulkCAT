@@ -129,16 +129,6 @@ apply_factors <- function(results,
         unname(score_lookup[as.character(x)])
       })
 
-      results <- results %>%
-        mutate(
-          AOOsmall_gridScore = aoo_scores_grid$aoosmall_grid,
-          AOOlarge_gridScore = aoo_scores_grid$aoolarge_grid,
-          AOOmatrix_gridScore = aoo_scores_grid$aoomatrix_grid,
-          AOOsmall_gridPoints = aoo_points_grid$aoosmall_grid,
-          AOOlarge_gridPoints = aoo_points_grid$aoolarge_grid,
-          AOOmatrix_gridPoints = aoo_points_grid$aoomatrix_grid
-        )
-
       # using grid values
       results$RankSpatial_smallPatch_grid <-
         score_rank(((eoo_points +
@@ -170,16 +160,6 @@ apply_factors <- function(results,
         aoo_scores <- lapply(aoo_points, \(x) {
           unname(score_lookup[as.character(x)])
         })
-
-        results <- results %>%
-          mutate(
-            AOOsmall_Score = aoo_scores$aoosmall,
-            AOOlarge_Score = aoo_scores$aoolarge,
-            AOOmatrix_Score = aoo_scores$aoomatrix,
-            AOOsmall_Points = aoo_points$aoosmall,
-            AOOlarge_Points = aoo_points$aoolarge,
-            AOOmatrix_Points = aoo_points$aoomatrix
-          )
 
         results$RankSpatial_smallPatch <-
           score_rank(((eoo_points +
@@ -730,6 +710,7 @@ eoo_scores <- c(
 
       # ---- User-supplied AOO rarity ----
       # pop_size, num_eo_user, eoo_calc, aoo_user, num_good_eo
+      Points_rarity_aoo_user_low <- NA
       if ("aoo_user" %in% names(factor_ranges)){
         Points_rarity_aoo_user_low <- mean_non_na(
           get_factor("pop_size", "low"),
@@ -877,8 +858,8 @@ eoo_scores <- c(
         trend_high
     }
 
-    # if there were any user supplied EO counts in factors_df
-    if ("Points_rarity_aoo_user_low" %in% names(results)){
+    # if there were any user supplied AOO values in factors_df
+    if (any(!is.na(Points_rarity_aoo_user_low))) {
       results$Points_factors_aoo_user_low <-
         rarity_multiplier * Points_rarity_aoo_user_low +
         0.3* threat_low +
@@ -905,9 +886,5 @@ eoo_scores <- c(
   #########################################
   # Final ranking rollup (flexible to Points_factor column names)
 
-  return(
-    list(
-    results = assign_rank(results),
-    factor_ranges = factor_ranges)
-  )
+  return(assign_rank(results))
 }

@@ -4,11 +4,11 @@
 #' @param EOID_col Required name containing unique identifier (e.g. EO_ID, ObjectID), for each pre-defined occurrence. Default = "EORANK"
 #' @param EO_rank_col Optional name containing overall EO_rank (e.g. A, AB, D, etc). Default = "EORANK"
 #' @param sname Species or community name column. Default = "scientificName"
-#' @param v2 Boolean if the new CNHP-proposed method for handling number of good EOs should be used.
+#' @param v2_good_eo Boolean to use CNHP's new method that calculates number of good EOs as a range. v2_good_eos considers E-ranked EOs as potentially A/B ranked and returns a factor range if applicable.
 #' @return A data frame with number of EOs and number of good EOs organized by species or community name
 #' @export
 #'
-tabulate_eos <- function(eo_shp, EOID_col = "EOID", EO_rank_col = "EORANK", sname = "scientificName", v2 = FALSE){
+tabulate_eos <- function(eo_shp, EOID_col = "EOID", EO_rank_col = "EORANK", sname = "scientificName", v2_good_eo = FALSE){
 
   # Read shapefile attribute table
   # Check that input is an sf object; if not, try reading as a file path
@@ -169,7 +169,7 @@ tabulate_eos <- function(eo_shp, EOID_col = "EOID", EO_rank_col = "EORANK", snam
   #####################################################
   # Alternative good EO assessment using biologist ranks
   #####################################################
-  if (v2){
+  if (v2_good_eo){
     # Good EO ranks used for the low estimate
     good_ranks_v2 <- c("A", "B", "AB", "AC", "A?", "B?")
 
