@@ -168,14 +168,13 @@ Ranking rules are based on the **RULES sheet** from the Element Rank Estimator E
 
 ## **Interpreting the output dataframe**
 
-The output will include the following data:
-* species/community (element) name
+The output will include the following data for each species/community (element):
 * number of input observations
 * calculated spatial rarity rank factors
   * eoo_area_km2
   * aoo_num_cells
   * num_eo_calc
-* An element rank and corresponding points based solely on calculated spatial factors
+* An element rank (RankSpatial) and corresponding points (PointsSpatial) based solely on calculated spatial factors 
 * Any columns in factor_df (if provided)
 * Low/high ranges for rarity, threat, and trend points
   * Rarity points will consider both the calculated number of EOs (Points_rarity_eo_calc_low) and user-provided EO counts (Points_rarity_eo_user_low)
