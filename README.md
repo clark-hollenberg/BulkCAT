@@ -165,3 +165,23 @@ Ranking rules are based on the **RULES sheet** from the Element Rank Estimator E
   * The use of supplemental rank factors is designed to assist with database QC as spatial data rapidly shift
   
 ---
+
+## **Interpreting the output dataframe**
+
+The output will include the following data:
+* species/community (element) name
+* number of input observations
+* calculated spatial rarity rank factors
+  * eoo_area_km2
+  * aoo_num_cells
+  * num_eo_calc
+* An element rank and corresponding points based solely on calculated spatial factors
+* Any columns in factor_df (if provided)
+* Low/high ranges for rarity, threat, and trend points
+  * Rarity points will consider both the calculated number of EOs (Points_rarity_eo_calc_low) and user-provided EO counts (Points_rarity_eo_user_low)
+  * low/high values will only differ if a factor range (e.g. Threat = AC) is supplied in factors_df
+* An element rank and corresponding points based any user-provided rank factors, spatial calculations, and either
+  * calculated number of EOs (Rank_factors_eo_calc)
+  * number of EOs as supplied by the user (Rank_factors_eo_user)
+
+**A comparison of RankSpatial, Rank_factors_eo_calc, and Rank_factors_eo_user will allow the user to select the most appropriate rank**
