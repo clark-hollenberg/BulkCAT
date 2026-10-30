@@ -1,6 +1,6 @@
 # BulkCAT
 
-Multispecies NatureServe element rarity rank calculator
+Multispecies NatureServe element rank calculator
 
 Created by Clark Hollenberg at the Colorado Natural Heritage Program (CNHP), October 2024
 
@@ -141,10 +141,11 @@ Ranking rules are based on the **RULES sheet** from the Element Rank Estimator E
 * For species, AOO is calculated based on the number of grid cells (either 2x2km or 1x1km) that intersect the point/poly occurrence layer.
 * Plant communities use direct estimate of area of occupancy in sq-km rather than the number of occupied cells. BulkCAT calculates AOO with direct measurements of polygon area (if polygons are supplied) and grid cell intersections for comparison. NatureServe generally uses direct area AOO, but grid cells may be more applicable for some communities.
   * AOO based on grid cell intersection is always calculated
-  * AOO based on polygon area is calculated if a polygon layer is supplied
+  * AOO based on direct measurement of polygon area is calculated if a polygon layer is supplied
   * Rank calculations are completed with up to four alternative AOO options (grid cell, direct area, user-defined AOO estimates, and without AOO)
   * AOO category metrics are variable based on the typical ecosystem patch size (small, large, or matrix). Large patch is used by default.
   * Typical patch size and expert-estimated AOO can be supplied in factors_df for communities
+    * "aoo_patch_type" in factors_df can be "Small patch", "Large patch", or "Matrix"
 ---
 
 ## **Estimating Number of EOs**
@@ -165,3 +166,22 @@ Ranking rules are based on the **RULES sheet** from the Element Rank Estimator E
   * The use of supplemental rank factors is designed to assist with database QC as spatial data rapidly shift
   
 ---
+
+## **Interpreting the output dataframe**
+
+The output will include the following data for each species/community (element):
+* number of input observations
+* calculated spatial rarity rank factors
+  * eoo_area_km2
+  * aoo_num_cells
+  * num_eo_calc
+* An element rank (RankSpatial) and corresponding points (PointsSpatial) based solely on calculated spatial factors 
+* Any columns in factor_df (if provided)
+* Low/high ranges for rarity, threat, and trend points
+  * Rarity points will consider both the calculated number of EOs (Points_rarity_eo_calc_low) and user-provided EO counts (Points_rarity_eo_user_low)
+  * low/high values will only differ if a factor range (e.g. Threat = AC) is supplied in factors_df
+* An element rank and corresponding points based any user-provided rank factors, spatial calculations, and either
+  * calculated number of EOs (Rank_factors_eo_calc)
+  * number of EOs as supplied by the user (Rank_factors_eo_user)
+
+**A comparison of RankSpatial, Rank_factors_eo_calc, and Rank_factors_eo_user will allow the user to select the most appropriate rank**
