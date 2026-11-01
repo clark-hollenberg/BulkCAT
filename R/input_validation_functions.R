@@ -3,8 +3,8 @@
 
 # checks to make sure grid_size is either 2km or 1km sides
 validate_grid_size <- function(grid_size){
-  if (!(grid_size %in% c(2000, 1000))){
-    stop("Only grid cell sizes of 4 sq-km (2000m sides) or 1 sq-km (1000m sides) are supported.")}
+  if (!(grid_size %in% c(2000, 1000, 10000))){
+    stop("Only grid cell sizes of 4 sq-km (2000m sides), 1 sq-km (1000m sides), or 10 sq-km (10000m sides for communities) are supported.")}
 }
 
 # checks input_df and poly_layer for issues, returns whether aoo must be skipped
