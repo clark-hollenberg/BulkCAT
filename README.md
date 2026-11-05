@@ -1,6 +1,6 @@
 # BulkCAT
 
-Multispecies NatureServe element rank calculator
+An R package for multi-species conservation status assessments in the NatureServe framework.
 
 Created by Clark Hollenberg at the Colorado Natural Heritage Program (CNHP), October 2024
 
