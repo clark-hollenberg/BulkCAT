@@ -1,6 +1,6 @@
 Package: BulkCAT
 Title: Multi-species conservation status assessment
-Version: 4.0.0
+Version: 1.0.0
 Authors@R: person("Clark", "Hollenberg", , "chollenb@colostate.edu", role = c("aut", "cre"))
 Description: BulkCAT calculates conservation status metrics for multiple species using user-supplied point or polygon occurrence data with WGS84 latitude and longitude coordinates.
  This package implements a bulk-processing version of the "Conservation status Assessment Tool" (CAT) methodology from NatureServe.

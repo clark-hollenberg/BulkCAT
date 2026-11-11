@@ -129,6 +129,7 @@ apply_factors <- function(results,
         unname(score_lookup[as.character(x)])
       })
 
+
       # using grid values
       results$RankSpatial_smallPatch_grid <-
         score_rank(((eoo_points +
@@ -177,7 +178,8 @@ apply_factors <- function(results,
                          num_points) / 4))
       }
 
-
+      results$AOOlarge_gridScore <- aoo_scores_grid$aoolarge_grid
+      results$AOOlarge_Score <- aoo_scores$aoolarge
 
       # calculate option without AOO
       results$RankSpatial_no_AOO <-
@@ -866,7 +868,7 @@ eoo_scores <- c(
         trend_low
 
       results$Points_factors_aoo_user_high <-
-        rarity_multiplier * Points_rarity_aoo_user_high +
+        rarity_multiplier * Points_rarity_aoo_user_high
         0.3* threat_high +
         trend_high
     }

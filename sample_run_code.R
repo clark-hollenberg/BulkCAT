@@ -68,3 +68,9 @@ output <- run_bulkCAT(input_df = eo_points,
 
 write.csv(output, "_v2_bulkcat_eo_ranking.csv", row.names=FALSE)
 
+####################################
+# example code for calculating ranks using only factors_df (no spatial data)
+
+factors_df <- read.csv("_testing/factors_df_communities.csv")
+output <- run_factors(factors_df, sname = "SName")
+
